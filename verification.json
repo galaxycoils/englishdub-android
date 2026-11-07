@@ -12,9 +12,9 @@
       "arm64-v8a"
     ],
     "bytes": 20297950,
-    "sha256": "2be21ac0203c6132767a5e341e901944eb52eb82eb9a989d247f3ad50ac7506a",
+    "sha256": "154498c6698ae52aeb501a192100cfcf493e7396dfda9988f84ad1a69c2d5c96",
     "release_unsigned_bytes": 20289742,
-    "release_unsigned_sha256": "dab92307dec723e48c68735d9fc828ec85ae8a43d4ef0df1c5e02f760358ded5",
+    "release_unsigned_sha256": "9797b0fb693bff90b8f8f3f2d27be8fd0335d1c124dceda9c168cfc9aeac5418",
     "debug_bytes": 26691282,
     "debug_sha256": "b47e92a8c67c36a75dd8e23f34ce8fc6e7a98bb204a03f88c63910a8a263b17f",
     "signature_v2": true,
@@ -127,5 +127,5 @@
     "url": "https://github.com/galaxycoils/englishdub-android",
     "status": "published with full restored history"
   },
-  "runtime_source_commit": "c0346fe5caa8bb9d8926f5ebb2dc6d7acee1d224"
+  "runtime_source_commit": "cb3f44a0b53ac9a0b4ccd21b859aa007d6c24148"
 }
