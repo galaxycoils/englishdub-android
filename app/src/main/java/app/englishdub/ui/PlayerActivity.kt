@@ -18,6 +18,7 @@ import app.englishdub.DubApplication
 import app.englishdub.data.DubJob
 import app.englishdub.data.SavedCue
 import app.englishdub.engine.DubTiming
+import app.englishdub.engine.ResourcePolicy
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -39,8 +40,15 @@ class PlayerActivity : ComponentActivity() {
     private var internalChange = false
     private var waitingForDub = false
     private val handler = Handler(Looper.getMainLooper())
+    private var seekAt = 0L
     private val tick = object : Runnable {
-        override fun run() { synchronize(); if (active && dub != null) handler.postDelayed(this, 100) }
+        override fun run() { synchronize(); scheduleTick() }
+    }
+    private fun scheduleTick() {
+        handler.removeCallbacks(tick)
+        val playing = active && english && dub != null && (video?.isPlaying == true || dub?.isPlaying == true)
+        val delay = ResourcePolicy.pollingMs(playing, android.os.SystemClock.elapsedRealtime() - seekAt)
+        if (delay != null) handler.postDelayed(tick, delay)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +108,7 @@ class PlayerActivity : ComponentActivity() {
     private fun openPlayers() {
         if (video != null) return
         val item = job ?: return
+        seekAt = android.os.SystemClock.elapsedRealtime()
         video = ExoPlayer.Builder(this).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             setHandleAudioBecomingNoisy(true)
@@ -107,11 +116,16 @@ class PlayerActivity : ComponentActivity() {
             setMediaItem(MediaItem.fromUri(Uri.parse(item.mediaUri)))
             seekTo(position); prepare()
             addListener(object : Player.Listener {
-                override fun onEvents(player: Player, events: Player.Events) { synchronize() }
-                override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) { synchronize(force = true) }
+                override fun onEvents(player: Player, events: Player.Events) { synchronize(); scheduleTick() }
+                override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) { seekAt = android.os.SystemClock.elapsedRealtime(); synchronize(force = true); scheduleTick() }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     if (!internalChange && !playWhenReady) waitingForDub = false
+                    if (playWhenReady) seekAt = android.os.SystemClock.elapsedRealtime()
                 }
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) seekAt = android.os.SystemClock.elapsedRealtime()
+                }
+                override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { seekAt = android.os.SystemClock.elapsedRealtime() }
                 override fun onPlayerError(error: PlaybackException) {
                     Toast.makeText(this@PlayerActivity, "This video cannot be played by your phone’s decoder. Try another file or audio track.", Toast.LENGTH_LONG).show()
                 }
@@ -124,7 +138,7 @@ class PlayerActivity : ComponentActivity() {
                 setMediaItem(MediaItem.fromUri(Uri.fromFile(File(path))))
                 seekTo(position); prepare()
                 addListener(object : Player.Listener {
-                    override fun onEvents(player: Player, events: Player.Events) { synchronize() }
+                    override fun onEvents(player: Player, events: Player.Events) { synchronize(); scheduleTick() }
                     override fun onPlayerError(error: PlaybackException) {
                         english = false; video?.volume = 1f
                         caption.text = "Saved dub could not be played. Original audio is active."
@@ -150,7 +164,18 @@ class PlayerActivity : ComponentActivity() {
                 return
             }
             val atVideoEnd = master.playbackState == Player.STATE_ENDED
-            if (force || (!atVideoEnd && DubTiming.needsResync(master.currentPosition, secondary.currentPosition))) secondary.seekTo(master.currentPosition)
+            val drifted = master.isPlaying && !atVideoEnd && DubTiming.needsResync(master.currentPosition, secondary.currentPosition)
+            if (force || drifted) {
+                val resume = master.playWhenReady || waitingForDub
+                internalChange = true
+                if (secondary.playWhenReady) secondary.pause()
+                if (master.playWhenReady) master.pause()
+                waitingForDub = resume
+                // Freeze the master first: decoder seek latency must not move the target away.
+                secondary.seekTo(master.currentPosition)
+                seekAt = android.os.SystemClock.elapsedRealtime()
+                internalChange = false
+            }
             if (secondary.playbackParameters != master.playbackParameters) secondary.playbackParameters = master.playbackParameters
             val dubWaiting = secondary.playbackState == Player.STATE_BUFFERING
             if (dubWaiting && master.playWhenReady) {
@@ -159,13 +184,14 @@ class PlayerActivity : ComponentActivity() {
                 waitingForDub = false; internalChange = true; master.play(); internalChange = false
             }
             val shouldPlay = master.playWhenReady && (master.isPlaying || atVideoEnd) && secondary.playbackState != Player.STATE_ENDED
-            secondary.playWhenReady = shouldPlay
+            if (secondary.playWhenReady != shouldPlay) secondary.playWhenReady = shouldPlay
             if (atVideoEnd) playerView.keepScreenOn = secondary.isPlaying
             val time = if (atVideoEnd) secondary.currentPosition else master.currentPosition
             var low = 0; var high = cues.lastIndex; var found = -1
             while (low <= high) { val mid = (low + high) ushr 1; if (cues[mid].spokenStartMs <= time) { found = mid; low = mid + 1 } else high = mid - 1 }
             val cue = cues.getOrNull(found)?.takeIf { time < it.spokenEndMs }
-            master.volume = if (cue == null) 1f else backgroundVolume
+            val volume = if (cue == null) 1f else backgroundVolume
+            if (master.volume != volume) master.volume = volume
             val text = cue?.english.orEmpty()
             if (caption.text.toString() != text) caption.text = text
         } finally { syncing = false; internalChange = false }
@@ -175,7 +201,10 @@ class PlayerActivity : ComponentActivity() {
         active = false; handler.removeCallbacks(tick)
         video?.let { position = it.currentPosition; playOnStart = it.playWhenReady || waitingForDub }
         waitingForDub = false
-        playerView.player = null; dub?.release(); video?.release(); dub = null; video = null
+        playerView.player = null
+        val oldDub = dub; val oldVideo = video
+        dub = null; video = null
+        oldDub?.release(); oldVideo?.release()
         super.onStop()
     }
     override fun onSaveInstanceState(outState: Bundle) {

@@ -1,5 +1,7 @@
 # Lightweight Offline English Dubbing for Android
 
+This is the accepted initial product plan. The implemented 0.2 optimization and its measured/unverified results are documented in [architecture](docs/ARCHITECTURE.md), [performance](docs/PERFORMANCE.md), and [validation](VALIDATION.md). Acceptance items below are requirements, not claims that every device check has passed. The complete APK target is now ≤21 MB excluding separately installed packs.
+
 ## Summary
 
 Build a native Android video player that prepares English dubbing before watching, then plays the saved dub with minimal processing.

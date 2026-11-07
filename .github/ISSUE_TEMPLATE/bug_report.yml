@@ -1,0 +1,22 @@
+name: Bug report
+description: Report a reproducible playback, preparation, or setup problem.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version and Android device
+      description: Include Android version, device model, and RAM.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, mode, and expected result
+      description: Include source language, subtitle type, codec/container, and failing stage.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add reviewed logs or a small redistributable sample. Keep private videos and signed URLs out of public reports.

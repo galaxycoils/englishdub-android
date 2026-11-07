@@ -21,7 +21,10 @@ import app.englishdub.data.DubJob
 import app.englishdub.engine.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
+import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import android.view.View
+import android.widget.FrameLayout
 import java.io.File
 import java.net.URI
 import java.util.UUID
@@ -34,9 +37,15 @@ class MainActivity : ComponentActivity() {
     private var offline = false
     private var subtitleFor: String? = null
     private var installed = emptySet<String>()
+    private var packWarning = ""
     private var lastBusy = false
     private var storageBytes = 0L
-    private var visibleCount = 20
+    private lateinit var library: RecyclerView
+    private lateinit var libraryAdapter: LibraryAdapter
+    private lateinit var libraryActions: LinearLayout
+    private lateinit var statusLabel: TextView
+    private lateinit var statusProgress: ProgressBar
+    private lateinit var pauseButton: Button
     private val videoPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { persist(it); lifecycleScope.launch { guarded {
             val job = DubJob(UUID.randomUUID().toString(), fileName(it), it.toString())
@@ -64,22 +73,44 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         subtitleFor = savedInstanceState?.getString("subtitleFor")
         offline = savedInstanceState?.getBoolean("offline") ?: false
-        root = column().apply { setBackgroundColor(canvasColor); setPadding(dp(22), dp(12), dp(22), dp(20)) }
-        scroll = ScrollView(this).apply { isFillViewport = true; addView(root) }
-        setContentView(scroll)
-        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+        root = column().apply { setPadding(0, 0, 0, dp(20)) }
+        scroll = ScrollView(this).apply { isFillViewport = true; addView(root); visibility = View.GONE }
+        libraryAdapter = LibraryAdapter(::libraryAction)
+        library = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@MainActivity); adapter = libraryAdapter; itemAnimator = null }
+        val shell = column().apply { setBackgroundColor(canvasColor); setPadding(dp(22), dp(12), dp(22), dp(10)) }
+        shell.addView(label("ENGLISH, FIRST", 12f, mint, true)); shell.addView(label("EnglishDub", 30f, ink, true))
+        val tabs = row()
+        tabs.addView(button("Library") { offline = false; render() }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(8) })
+        tabs.addView(button("Offline setup") {
+            offline = true; render()
+            lifecycleScope.launch { refreshPacks(); if (offline) render() }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        shell.addView(tabs)
+        statusLabel = label("", 14f, mint)
+        statusProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
+        pauseButton = button("Pause task") { PreparationService.pause(this) }
+        shell.addView(statusLabel); shell.addView(statusProgress); shell.addView(pauseButton)
+        libraryActions = column().apply {
+            addView(button("＋  Open a video", true) { videoPicker.launch(arrayOf("video/*")) })
+            addView(button("Download a direct video link") { linkDialog() })
+        }
+        shell.addView(libraryActions)
+        val body = FrameLayout(this).apply { addView(library); addView(scroll) }
+        shell.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        setContentView(shell)
+        ViewCompat.setOnApplyWindowInsetsListener(shell) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
+            view.setPadding(dp(22) + bars.left, dp(12) + bars.top, dp(22) + bars.right, dp(10) + bars.bottom); insets
         }
         lifecycleScope.launch {
-            if (!PreparationService.status.value.busy) app.jobs.recoverInterrupted()
-            refreshPacks()
+            app.recovery.await()
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                combine(app.jobs.observe(), PreparationService.status) { items, status -> items to status }.debounce(150).collect { (items, status) ->
+                combine(app.jobs.observe(), PreparationService.status) { items, status -> items to status }.collect { (items, status) ->
                     jobs = items
-                    if (lastBusy && !status.busy) refreshPacks()
+                    updateStatus(status)
+                    updateLibrary()
+                    if (lastBusy && !status.busy && offline) { refreshPacks(); render() }
                     lastBusy = status.busy
-                    render()
                 }
             }
         }
@@ -89,73 +120,53 @@ class MainActivity : ComponentActivity() {
         outState.putString("subtitleFor", subtitleFor); outState.putBoolean("offline", offline); super.onSaveInstanceState(outState)
     }
     private fun render() {
-        val y = scroll.scrollY
-        root.removeAllViews()
-        root.addView(label("ENGLISH, FIRST", 12f, mint, true))
-        root.addView(label("EnglishDub", 34f, ink, true))
-        root.addView(label(if (offline) "Set up once. Watch offline." else "Your films. An English voice.", 16f, muted))
-        val tabs = row()
-        tabs.addView(button("Library", !offline) { offline = false; render() }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(8) })
-        tabs.addView(button("Offline setup", offline) { offline = true; lifecycleScope.launch { refreshPacks(); render() } }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        root.gap(18); root.addView(tabs)
-        val status = PreparationService.status.value
-        if (status.busy) root.addView(card().apply {
-            addView(label(status.message, 16f, mint, true))
-            addView(ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply { progress = status.progress })
-            addView(button("Pause task") { PreparationService.pause(this@MainActivity) })
-        }) else if (status.message.isNotBlank() && status.message != "Completed") root.addView(label(status.message, 14f, muted))
-        if (offline) renderOffline() else renderLibrary()
-        scroll.post { scroll.scrollTo(0, y) }
+        scroll.visibility = if (offline) View.VISIBLE else View.GONE
+        library.visibility = if (offline) View.GONE else View.VISIBLE
+        libraryActions.visibility = if (offline) View.GONE else View.VISIBLE
+        updateStatus(PreparationService.status.value)
+        if (offline) {
+            val y = scroll.scrollY
+            root.removeAllViews(); renderOffline(); scroll.post { scroll.scrollTo(0, y) }
+        } else updateLibrary()
     }
-    private fun renderLibrary() {
-        root.addView(button("＋  Open a video", true) { videoPicker.launch(arrayOf("video/*")) })
-        root.addView(button("Download a direct video link") { linkDialog() })
-        root.gap(16)
-        root.addView(label("YOUR LIBRARY", 12f, muted, true))
-        if (jobs.isEmpty()) root.addView(card().apply {
-            addView(label("A lighter way to watch", 21f, ink, true))
-            addView(label("Open a film from your phone. Use English audio, turn subtitles into speech, or prepare a dub from the original dialogue.", 16f, muted))
-            gap(8)
-            addView(label("Hindi · Urdu · Tamil → English", 14f, mint))
-            addView(label("One offline voice. No account. Optional AI packs.", 14f, muted))
-        })
-        jobs.take(visibleCount).forEach { job -> root.addView(card().apply {
-            addView(label(job.state.uppercase(), 11f, mint, true))
-            addView(label(job.title, 20f, ink, true))
-            addView(label(job.message, 14f, muted))
-            if (job.state in listOf("preparing", "downloading", "paused")) addView(ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply { progress = job.progress })
-            if (!job.mediaUri.startsWith("http")) {
-                addView(button(if (job.audioPath != null) "Watch in English" else "Watch · English audio preferred", true) {
-                    if (PreparationService.status.value.busy) toast("Pause preparation before watching to keep playback light.")
-                    else startActivity(Intent(this@MainActivity, PlayerActivity::class.java).putExtra("id", job.id))
-                })
-                if (job.state !in listOf("preparing", "downloading")) {
-                    addView(button(if (job.state in listOf("paused", "failed")) "Resume preparation" else "Prepare English dub") {
-                        if (job.state in listOf("paused", "failed")) startTask(PreparationService.PREPARE, job.id) else prepareDialog(job)
-                    })
-                    addView(button(if (job.subtitleUri == null) "Add SRT / WebVTT subtitles" else "Replace subtitle file") {
-                        if (checkIdleUi()) { subtitleFor = job.id; subtitlePicker.launch(arrayOf("*/*")) }
-                    })
-                }
-            } else if (job.state != "downloading") addView(button("Download / resume", true) { startTask(PreparationService.DOWNLOAD, job.id) })
-            if (!PreparationService.status.value.busy) addView(button("Remove from library") {
-                AlertDialog.Builder(this@MainActivity).setTitle("Remove this video?")
-                    .setMessage("Remove its saved dub, preparation files, and any copy downloaded by EnglishDub. Your original local file stays on your phone.")
-                    .setNegativeButton("Keep", null).setPositiveButton("Remove") { _, _ -> lifecycleScope.launch { guarded {
-                        withContext(Dispatchers.IO) { app.jobDirectory(job.id).deleteRecursively() }; app.jobs.delete(job.id)
-                    } } }.show()
-            })
-        }) }
-        if (jobs.size > visibleCount) root.addView(button("Show more videos") { visibleCount += 20; render() })
-        root.gap(18)
-        root.addView(label("Direct downloadable videos only. Playback formats depend on your phone’s codecs.", 12f, muted))
+    private fun updateStatus(status: PreparationStatus) {
+        val text = if (status.busy) status.message else status.message.takeUnless { it == "Completed" }.orEmpty()
+        if (statusLabel.text.toString() != text) statusLabel.text = text
+        statusLabel.visibility = if (text.isBlank()) View.GONE else View.VISIBLE
+        statusProgress.visibility = if (status.busy) View.VISIBLE else View.GONE
+        statusProgress.progress = status.progress
+        pauseButton.visibility = if (status.busy) View.VISIBLE else View.GONE
+    }
+    private fun updateLibrary() {
+        val busy = PreparationService.status.value.busy
+        val rows = if (jobs.isEmpty()) listOf(LibraryRow(null, busy)) else jobs.map { LibraryRow(it, busy) }
+        libraryAdapter.submitList(rows)
+    }
+    private fun libraryAction(action: String, job: DubJob) {
+        if (!checkIdleUi()) return
+        when (action) {
+            "watch" -> startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id))
+            "prepare" -> if (job.state in listOf("paused", "failed")) startTask(PreparationService.PREPARE, job.id) else prepareDialog(job)
+            "subtitles" -> { subtitleFor = job.id; subtitlePicker.launch(arrayOf("*/*")) }
+            "download" -> startTask(PreparationService.DOWNLOAD, job.id)
+            "remove" -> AlertDialog.Builder(this).setTitle("Remove this video?")
+                .setMessage("Remove its saved dub, preparation files, and any copy downloaded by EnglishDub. Your original local file stays on your phone.")
+                .setNegativeButton("Keep", null).setPositiveButton("Remove") { _, _ -> lifecycleScope.launch { guarded {
+                    checkIdle(); withContext(Dispatchers.IO) { app.jobDirectory(job.id).deleteRecursively() }; app.jobs.delete(job.id)
+                } } }.show()
+        }
     }
 
     private fun renderOffline() {
+        if (packWarning.isNotBlank()) root.addView(label(packWarning, 13f, muted))
         root.addView(card().apply {
             addView(label("01  English voice", 20f, ink, true))
             addView(label("Use an installed English voice that works without a network connection.", 14f, muted))
-            addView(button("Check offline English voice", true) { lifecycleScope.launch { guarded { OfflineVoice.create(this@MainActivity).use { toast("Offline English voice is ready.") } } } })
+            addView(button("Check offline English voice", true) { lifecycleScope.launch { guarded {
+                checkIdle(); toast("Checking offline speech generation…")
+                withContext(Dispatchers.IO) { OfflineVoice.verify(this@MainActivity) }
+                toast("Offline English voice generated audio successfully.")
+            } } })
             addView(button("Open Android voice settings") {
                 try { startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
                 catch (_: Exception) { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)); toast("Search Settings for Text-to-speech.") }
@@ -181,11 +192,30 @@ class MainActivity : ComponentActivity() {
             })
         })
         root.addView(card().apply {
+            addView(label("Speech detection · experimental", 18f, ink, true))
+            addView(label("Optional 0.9 MB detector. It can skip non-dialogue, but remains off by default until Hindi, Urdu, and Tamil quality is verified.", 14f, muted))
+            addView(button(if (app.models.vadReady) "Speech detector installed · remove" else "Download speech detector") {
+                if (app.models.vadReady) { if (checkIdleUi()) { app.models.deleteVad(); render() } }
+                else startTask(PreparationService.VAD_PACK, "vad-pack")
+            })
+            val settings = getSharedPreferences("preparation", MODE_PRIVATE)
+            addView(Switch(this@MainActivity).apply {
+                text = "Use experimental speech detection"; setTextColor(ink)
+                isEnabled = app.models.vadReady && !PreparationService.status.value.busy
+                isChecked = settings.getBoolean("vad", false)
+                setOnCheckedChangeListener { _, checked -> settings.edit().putBoolean("vad", checked).apply() }
+            })
+            if (app.models.hasPartial) addView(button("Delete incomplete speech download") { if (checkIdleUi()) { app.models.deletePartial(); render() } })
+        })
+        root.addView(card().apply {
             addView(label("Keep storage light", 20f, ink, true))
             addView(label("Videos and prepared dubs: ${storageBytes / 1024 / 1024} MB\nAI models are unloaded before watching. EnglishDub does not upload your video or dialogue.", 14f, muted))
             addView(button("Clear completed preparation files") { lifecycleScope.launch { guarded {
                 checkIdle(); withContext(Dispatchers.IO) {
-                    jobs.filter { it.state == "ready" }.forEach { job -> app.jobDirectory(job.id).listFiles()?.filter { it.extension in listOf("pcm", "wav") }?.forEach { it.delete() } }
+                    jobs.filter { it.state == "ready" }.forEach { job ->
+                        File(app.jobDirectory(job.id), "cue-audio").deleteRecursively()
+                        app.jobDirectory(job.id).listFiles()?.filter { it.extension in listOf("pcm", "wav") }?.forEach { it.delete() }
+                    }
                 }; refreshPacks(); toast("Temporary preparation files cleared. Saved dubs are kept."); render()
             } } })
         })
@@ -202,11 +232,7 @@ class MainActivity : ComponentActivity() {
                 checkIdle()
                 val speech = selection >= 4
                 val code = if (speech) listOf("hi", "ur", "ta")[selection - 4] else listOf("en", "hi", "ur", "ta")[selection]
-                if (speech) check(app.models.ready) { "Download the optional speech pack in Offline setup first." }
-                else if (code != "en") check(code in installed) { "Download the ${OfflineTranslation.languages[code]} translation pack in Offline setup first." }
-                app.jobs.clearCues(job.id)
-                app.jobs.save(job.copy(mode = if (speech) "speech" else "subtitles", sourceLanguage = code,
-                    state = "new", audioPath = null, decodedUntilMs = 0, progress = 0))
+                app.jobs.request(job.id, if (speech) "speech" else "subtitles", code)
                 startTask(PreparationService.PREPARE, job.id)
             } } }.show()
     }
@@ -225,7 +251,10 @@ class MainActivity : ComponentActivity() {
     private fun persist(uri: Uri) { try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { toast("This provider may require reopening the file after restarting your phone.") } }
     private fun fileName(uri: Uri): String = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Local video"
     private suspend fun refreshPacks() {
-        try { installed = OfflineTranslation.installed() } catch (e: CancellationException) { throw e } catch (_: Exception) { installed = emptySet() }
+        try { installed = withContext(Dispatchers.IO) { withTimeout(5000) { OfflineTranslation.installed() } }; packWarning = "" }
+        catch (_: TimeoutCancellationException) { installed = emptySet(); packWarning = "Translation pack status is unavailable. Voice and speech setup remain available." }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { installed = emptySet(); packWarning = "Translation pack status is unavailable. Voice and speech setup remain available." }
         storageBytes = withContext(Dispatchers.IO) { File(app.filesDir, "jobs").walkTopDown().filter { it.isFile }.sumOf { it.length() } }
     }
     private fun checkIdle() { check(!PreparationService.status.value.busy) { "Pause the current task first." } }

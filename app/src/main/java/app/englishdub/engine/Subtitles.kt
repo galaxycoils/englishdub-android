@@ -3,6 +3,8 @@ package app.englishdub.engine
 data class TextCue(val startMs: Long, val endMs: Long, val text: String)
 
 object Subtitles {
+    private val markup = Regex("<[^>]*>|\\{[^}]*\\}")
+    private val whitespace = Regex("\\s+")
     private val timing = Regex("(?m)^\\s*((?:\\d+:)?\\d{2}:\\d{2}[.,]\\d{3})\\s*-->\\s*((?:\\d+:)?\\d{2}:\\d{2}[.,]\\d{3})[^\\n]*\\n")
     fun parse(input: String): List<TextCue> {
         val normalized = input.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
@@ -21,9 +23,9 @@ object Subtitles {
         return result
     }
 
-    fun clean(text: String) = text.replace(Regex("<[^>]*>|\\{[^}]*}"), "")
+    fun clean(text: String) = text.replace(markup, "")
         .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ")
-        .replace(Regex("\\s+"), " ").trim()
+        .replace(whitespace, " ").trim()
 
     private fun timestamp(value: String): Long {
         val parts = value.replace(',', '.').split(':')

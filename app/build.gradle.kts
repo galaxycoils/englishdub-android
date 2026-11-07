@@ -12,9 +12,11 @@ android {
         applicationId = "app.englishdub"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
-        ndk { abiFilters += "arm64-v8a" }
+        versionCode = 2
+        versionName = "0.2.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += "en"
+        ndk { abiFilters += providers.gradleProperty("dub.abi").getOrElse("arm64-v8a").split(',') }
         externalNativeBuild {
             cmake { arguments += listOf("-DANDROID_STL=c++_static", "-DGGML_OPENMP=OFF") }
         }
@@ -40,6 +42,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isReturnDefaultValues = true }
+    sourceSets.getByName("androidTest").assets.srcDir("src/main/cpp/vendor/whisper/samples")
     lint { abortOnError = true }
 }
 
@@ -47,6 +50,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.media3:media3-exoplayer:1.7.1")
     implementation("androidx.media3:media3-ui:1.7.1")
     implementation("androidx.room:room-runtime:2.7.1")
@@ -56,4 +60,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

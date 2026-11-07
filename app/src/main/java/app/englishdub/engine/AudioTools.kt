@@ -79,7 +79,7 @@ object AudioTools {
         } finally { extractor.release() }
     }
 
-    suspend fun decodeChunks(context: Context, uri: Uri, fromMs: Long, emit: suspend (Long, FloatArray) -> Unit) {
+    suspend fun decodeChunks(context: Context, uri: Uri, fromMs: Long, emit: suspend (Long, ByteBuffer, Int, Double) -> Unit) {
         val extractor = extractor(context, uri)
         var codec: MediaCodec? = null
         try {
@@ -96,13 +96,20 @@ object AudioTools {
             var resampler = MonoResampler(sampleRate)
             val chunkSize = RATE * 30
             val chunk = FloatArray(chunkSize + 32)
+            val direct = ByteBuffer.allocateDirect(chunkSize * 4).order(ByteOrder.nativeOrder())
+            suspend fun emitBuffer(start: Long, count: Int) {
+                direct.clear(); direct.asFloatBuffer().put(chunk, 0, count)
+                var energy = 0.0
+                for (i in 0 until count) energy += chunk[i] * chunk[i]
+                emit(start, direct, count, kotlin.math.sqrt(energy / count))
+            }
             var chunkCount = 0
             var chunkStart = fromMs
             var eosInput = false
             var eosOutput = false
             val info = MediaCodec.BufferInfo()
             suspend fun flushChunk() {
-                emit(chunkStart, chunk.copyOf(chunkSize))
+                emitBuffer(chunkStart, chunkSize)
                 val remaining = chunkCount - chunkSize
                 if (remaining > 0) chunk.copyInto(chunk, 0, chunkSize, chunkCount)
                 chunkStart += 30_000; chunkCount = remaining
@@ -154,7 +161,7 @@ object AudioTools {
                     codec.releaseOutputBuffer(index, false)
                 }
             }
-            if (chunkCount > 0) emit(chunkStart, chunk.copyOf(chunkCount))
+            if (chunkCount > 0) emitBuffer(chunkStart, chunkCount)
         } finally { try { codec?.stop() } finally { codec?.release(); extractor.release() } }
     }
 

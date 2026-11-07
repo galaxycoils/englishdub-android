@@ -38,11 +38,12 @@ object Downloads {
             if (validator != null) etagFile.writeText(validator) else etagFile.delete()
             var total = base
             var lastPercent = -1
+            val storageGate = WorkGate()
             connection.inputStream.use { input -> partial.outputStream(append).use { output ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
                     currentCoroutineContext().ensureActive()
-                    require(partial.parentFile!!.usableSpace > 16 * 1024 * 1024) { "Storage is full. Free some space and resume." }
+                    if (storageGate.due(android.os.SystemClock.elapsedRealtime(), total)) require(partial.parentFile!!.usableSpace > 16 * 1024 * 1024) { "Storage is full. Free some space and resume." }
                     val count = input.read(buffer)
                     if (count < 0) break
                     output.write(buffer, 0, count)
@@ -63,6 +64,22 @@ class ModelStore(context: Context) {
     private val directory = File(context.filesDir, "models").apply { mkdirs() }
     val speechFile = File(directory, "ggml-base-q5_1.bin")
     val ready get() = speechFile.exists() && File(directory, "verified").exists() && speechFile.length() == SIZE
+    val hasPartial get() = File(speechFile.path + ".part").exists() || (speechFile.exists() && !ready)
+    val vadFile = File(directory, "ggml-silero-v5.1.2.bin")
+    val vadReady get() = vadFile.length() == VAD_SIZE && File(directory, "vad-verified").exists()
+    fun deleteVad() { vadFile.delete(); File(directory, "vad-verified").delete(); File(vadFile.path + ".part").delete(); File(vadFile.path + ".etag").delete() }
+    fun deletePartial() {
+        File(speechFile.path + ".part").delete(); File(speechFile.path + ".etag").delete()
+        if (!ready) { speechFile.delete(); File(directory, "verified").delete() }
+    }
+    suspend fun downloadVad(progress: suspend (Int) -> Unit) {
+        Downloads.fetch(VAD_URL, vadFile, progress)
+        withContext(Dispatchers.IO) {
+            val hash = MessageDigest.getInstance("SHA-256").digest(vadFile.readBytes()).joinToString("") { "%02x".format(it) }
+            if (hash != VAD_SHA256) { vadFile.delete(); error("Speech detector failed verification. Download it again.") }
+            File(directory, "vad-verified").writeText(hash)
+        }
+    }
     suspend fun download(progress: suspend (Int) -> Unit) {
         Downloads.fetch(URL, speechFile, progress)
         withContext(Dispatchers.IO) {
@@ -81,5 +98,8 @@ class ModelStore(context: Context) {
         const val SIZE = 59_707_625L
         const val URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin"
         const val SHA256 = "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898"
+        const val VAD_SIZE = 885098L
+        const val VAD_URL = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
+        const val VAD_SHA256 = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf"
     }
 }

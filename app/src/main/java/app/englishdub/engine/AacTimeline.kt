@@ -35,15 +35,18 @@ object AacTimeline {
             var inputDone = false; var outputDone = false
             var lastPercent = -1
             val bytes = ByteArray(4096)
+            val storageGate = WorkGate()
             while (!outputDone) {
                 currentCoroutineContext().ensureActive()
-                require(output.parentFile!!.usableSpace > 16 * 1024 * 1024) { "Storage is full. Free space and resume." }
+                if (storageGate.due(android.os.SystemClock.elapsedRealtime(), framesWritten * 2)) {
+                    require(output.parentFile!!.usableSpace > 16 * 1024 * 1024) { "Storage is full. Free space and resume." }
+                }
                 if (!inputDone) {
                     val index = codec.dequeueInputBuffer(10_000)
                     if (index >= 0) {
                         val buffer = codec.getInputBuffer(index)!!
                         buffer.clear()
-                        val count = minOf(buffer.remaining() / 2, bytes.size / 2, (totalFrames - framesWritten).toInt().coerceAtLeast(0))
+                        val count = minOf(buffer.remaining() / 2L, bytes.size / 2L, (totalFrames - framesWritten).coerceAtLeast(0)).toInt()
                         bytes.fill(0)
                         var filled = 0
                         while (filled < count) {

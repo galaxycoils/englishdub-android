@@ -6,3 +6,9 @@ local.properties
 *.jks
 *.keystore
 captures/
+*.apk
+*.aab
+*.hprof
+*.pftrace
+*.bundle
+qa-artifacts/

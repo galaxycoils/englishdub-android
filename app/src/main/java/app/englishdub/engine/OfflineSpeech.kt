@@ -17,15 +17,17 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class OfflineTranslation(language: String) : Closeable {
+class OfflineTranslation(language: String) : TextTranslator {
     private val translator = Translation.getClient(TranslatorOptions.Builder()
         .setSourceLanguage(language).setTargetLanguage(TranslateLanguage.ENGLISH).build())
-    suspend fun translate(text: String) = translator.translate(text).await()
+    override suspend fun translate(text: String) = translator.translate(text).await()
     override fun close() = translator.close()
     companion object {
         val languages = linkedMapOf("en" to "English", "hi" to "Hindi", "ur" to "Urdu", "ta" to "Tamil")
         private val manager get() = RemoteModelManager.getInstance()
-        suspend fun installed(): Set<String> = manager.getDownloadedModels(TranslateRemoteModel::class.java).await().map { it.language }.toSet()
+        suspend fun installed(): Set<String> = try {
+            withTimeout(10000) { manager.getDownloadedModels(TranslateRemoteModel::class.java).await().map { it.language }.toSet() }
+        } catch (_: TimeoutCancellationException) { error("Translation pack status is unavailable. Check Offline setup and retry.") }
         suspend fun download(language: String) {
             manager.download(TranslateRemoteModel.Builder(language).build(), DownloadConditions.Builder().requireWifi().build()).await()
         }
@@ -33,10 +35,11 @@ class OfflineTranslation(language: String) : Closeable {
     }
 }
 
-class OfflineVoice private constructor(private val tts: TextToSpeech) : Closeable {
-    suspend fun synthesize(text: String, file: File, speed: Float = 1f) = withContext(Dispatchers.Main) {
+class OfflineVoice private constructor(private val tts: TextToSpeech, private val engineVersion: Long) : VoiceSynthesizer {
+    override val identity: String get() = PreparationIdentity.digest(tts.defaultEngine.orEmpty(), tts.voice?.name.orEmpty(), engineVersion.toString(), PreparationIdentity.PIPELINE)
+    override suspend fun synthesize(text: String, file: File, speed: Float) = withContext(Dispatchers.Main) {
         require(text.length <= TextToSpeech.getMaxSpeechInputLength()) { "A subtitle line is too long for the offline voice. Split it into shorter cues." }
-        withTimeout(90_000) {
+        try { withTimeout(90_000) {
             suspendCancellableCoroutine<Unit> { continuation ->
                 val id = java.util.UUID.randomUUID().toString()
                 tts.setSpeechRate(speed)
@@ -52,10 +55,25 @@ class OfflineVoice private constructor(private val tts: TextToSpeech) : Closeabl
                     continuation.resumeWithException(IllegalStateException("Could not start offline speech generation."))
                 }
             }
+        } } catch (_: TimeoutCancellationException) {
+            tts.stop()
+            error("The offline voice stopped responding. Check Android voice settings or select another installed offline English engine, then resume.")
         }
     }
     override fun close() { tts.stop(); tts.shutdown() }
     companion object {
+        suspend fun verify(context: Context) {
+            val wav = File.createTempFile("voice-check", ".wav", context.cacheDir)
+            val pcm = File.createTempFile("voice-check", ".pcm", context.cacheDir)
+            try {
+                withTimeout(20000) {
+                    create(context).use { it.synthesize("English voice check.", wav) }
+                    check(AudioTools.wavToPcm(wav, pcm) > 0) { "The offline voice generated no audio." }
+                }
+            } catch (_: TimeoutCancellationException) {
+                error("The offline voice did not respond. Select another installed offline English engine in Android voice settings.")
+            } finally { wav.delete(); pcm.delete() }
+        }
         suspend fun create(context: Context): OfflineVoice = withContext(Dispatchers.Main) {
             var engine: TextToSpeech? = null
             try {
@@ -75,7 +93,11 @@ class OfflineVoice private constructor(private val tts: TextToSpeech) : Closeabl
                 }?.sortedWith(compareBy({ it.locale.country != "US" }, { it.latency }, { -it.quality }))?.firstOrNull()
                     ?: error("No offline English voice is installed. Open Voice settings, download English voice data, then retry.")
                 check(tts.setVoice(voice) == TextToSpeech.SUCCESS) { "Could not select the offline English voice." }
-                OfflineVoice(tts)
+                val engineVersion = try {
+                    val info = context.packageManager.getPackageInfo(tts.defaultEngine, 0)
+                    if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+                } catch (_: Exception) { 0L }
+                OfflineVoice(tts, engineVersion)
             } catch (e: Throwable) { engine?.shutdown(); throw e }
         }
     }
