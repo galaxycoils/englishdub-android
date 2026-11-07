@@ -12,13 +12,14 @@
       "arm64-v8a"
     ],
     "bytes": 20248794,
-    "sha256": "ccd1869b4fac072c8ad7e4d1ef355fa44a1d624b0ba3fd9ab663e07c11503e21",
+    "sha256": "c223f02a03d8a3c7feab0528f27a263114404a8c94821bfdb7ffe14994281802",
     "signature_v2": true,
     "zip_alignment_16kb": true,
     "all_native_load_alignment_16kb": true,
     "same_signer_as_0_2_0_cloud_preview": false,
     "signer_certificate_sha256": "7c72a527b19dc406429ad68096fde910be946de674c334960306f6fe1ee93283",
-    "signing": "new Mac local debug signer; not a production key"
+    "signing": "new Mac local debug signer; not a production key",
+    "ui_smoke": "installed and library rendered on same API35 ARM64 emulator; separate preview package"
   },
   "jvm": {
     "tests": 25,
@@ -120,5 +121,6 @@
     "approved_repository": "galaxycoils/englishdub-android",
     "url": "https://github.com/galaxycoils/englishdub-android",
     "status": "published with full restored history"
-  }
+  },
+  "runtime_source_commit": "c0346fe5caa8bb9d8926f5ebb2dc6d7acee1d224"
 }
