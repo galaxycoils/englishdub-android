@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 experimental preview
+
+- Add audio and text-subtitle track inspection with language normalization, track labels, "Unknown language" fallback, priority recommendations (English audio → English subtitles → translated subtitles → speech recognition), explicit overrides, and millisecond subtitle timing offsets.
+- Add 60-second scene previews (`PreviewRange`) shortened at movie end, separate from full-film completion state, reusing translation and speech assets, with full-film preparation time estimates marked as `(estimate)`.
+- Add searchable dialogue review and correction: edit English text, adjust cue timing, mark cues "subtitles only," jump to cue playback, and rebuild dubs without repeating speech recognition or unchanged translations while keeping the previous playable dub until atomic commit.
+- Prevent speech translation (`mode == "speech"`) from presenting its English output as an original-language transcript (`transcriptAvailable = false`).
+- Add film-specific pronunciation replacements (`PronunciationEntry`) applied only to spoken audio while captions and SRT export retain normal spelling.
+- Add offline English voice selection with short sample playback, caption visibility/text-size controls, per-film remembered playback position and preferences, "Replay last dialogue," and manual song ranges (`PreservedRange`) that preserve original audio without synthesized speech.
+- Add a persistent, reorderable preparation queue with charging-only default, power-disconnect pause handling, active-session continuation, and granular storage accounting/cleanup for previews, reusable speech clips, completed dubs, and app-owned downloads.
+- Add UTF-8 SRT and English voice-track M4A exports through Android's document picker with recoverable cancellation and write-failure handling.
+- Migrate Room schema 2→3 (`MIGRATION_2_3`), split stage cache signatures (`recognition`, `translation`, `speech`, `timeline`), and store reusable compressed speech clips (`.pcm.gz`) with incremental decoding and 256 MiB LRU eviction protecting active-job assets.
+- Add the documented 36-clip Hindi/Urdu/Tamil evaluation set (`docs/evaluation/EVALUATION-SET-0.3.md`); keep language quality labeled experimental pending human bilingual review.
+
 ## 0.2.1 preview
 
 - Preserve playback intent across delayed Media3 pause/resume callbacks after seeking or buffering.

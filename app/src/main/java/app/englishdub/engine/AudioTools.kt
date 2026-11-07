@@ -28,32 +28,150 @@ class MonoResampler(@PublishedApi internal val inputRate: Int, @PublishedApi int
 
 object AudioTools {
     const val RATE = 16000
+    val SUPPORTED_SUBTITLE_MIMES = setOf("application/x-subrip", "text/vtt", "text/3gpp")
+    private val LANGUAGE_NAMES = mapOf("en" to "English", "hi" to "Hindi", "ur" to "Urdu", "ta" to "Tamil")
+
+    fun normalizeLanguage(raw: String?): Pair<String, String> {
+        val clean = raw?.trim()?.lowercase().orEmpty()
+        if (clean.isEmpty() || clean in setOf("und", "unknown", "mul", "zxx", "none")) {
+            return "und" to "Unknown language"
+        }
+        val code = when {
+            clean == "en" || clean == "eng" || clean.startsWith("en-") || clean.startsWith("en_") -> "en"
+            clean == "hi" || clean == "hin" || clean.startsWith("hi-") || clean.startsWith("hi_") -> "hi"
+            clean == "ur" || clean == "urd" || clean.startsWith("ur-") || clean.startsWith("ur_") -> "ur"
+            clean == "ta" || clean == "tam" || clean.startsWith("ta-") || clean.startsWith("ta_") -> "ta"
+            else -> clean.substringBefore('-').substringBefore('_')
+        }
+        val label = LANGUAGE_NAMES[code] ?: java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH)
+            .takeIf { it.isNotBlank() && it.lowercase() != code && it.lowercase() != "und" }
+            ?: "Unknown language"
+        return (if (label == "Unknown language") "und" else code) to label
+    }
+
+    fun recommendSource(
+        audioTracks: List<MediaTrackInfo>,
+        subtitleTracks: List<MediaTrackInfo>,
+        hasExternalSubtitles: Boolean = false,
+        externalSubtitleLanguage: String = "en",
+        preferredLanguage: String = "hi",
+    ): SourceRecommendation {
+        val englishAudio = audioTracks.firstOrNull { it.languageCode == "en" }
+        if (englishAudio != null) {
+            return SourceRecommendation(
+                path = RecommendedPath.ENGLISH_AUDIO,
+                languageCode = "en",
+                audioTrackIndex = englishAudio.index,
+                summary = "Recommended: Existing English audio (${englishAudio.label})",
+            )
+        }
+        val preferredAudioTrack = audioTracks.firstOrNull { it.languageCode == preferredLanguage }
+            ?: audioTracks.firstOrNull { it.languageCode in listOf("hi", "ur", "ta") }
+            ?: audioTracks.firstOrNull()
+        val defaultAudioIndex = preferredAudioTrack?.index ?: -1
+        if (hasExternalSubtitles && externalSubtitleLanguage == "en") {
+            return SourceRecommendation(
+                path = RecommendedPath.ENGLISH_SUBTITLES,
+                languageCode = "en",
+                audioTrackIndex = defaultAudioIndex,
+                summary = "Recommended: External English subtitles",
+            )
+        }
+        val englishSub = subtitleTracks.firstOrNull { it.languageCode == "en" }
+        if (englishSub != null) {
+            return SourceRecommendation(
+                path = RecommendedPath.ENGLISH_SUBTITLES,
+                languageCode = "en",
+                audioTrackIndex = defaultAudioIndex,
+                subtitleTrackIndex = englishSub.index,
+                summary = "Recommended: Embedded English subtitles (${englishSub.label})",
+            )
+        }
+        if (hasExternalSubtitles && externalSubtitleLanguage in listOf("hi", "ur", "ta")) {
+            val langName = LANGUAGE_NAMES[externalSubtitleLanguage] ?: externalSubtitleLanguage
+            return SourceRecommendation(
+                path = RecommendedPath.TRANSLATED_SUBTITLES,
+                languageCode = externalSubtitleLanguage,
+                audioTrackIndex = defaultAudioIndex,
+                summary = "Recommended: Translate external $langName subtitles",
+            )
+        }
+        val translatedSub = subtitleTracks.firstOrNull { it.languageCode == preferredLanguage }
+            ?: subtitleTracks.firstOrNull { it.languageCode in listOf("hi", "ur", "ta") }
+        if (translatedSub != null) {
+            return SourceRecommendation(
+                path = RecommendedPath.TRANSLATED_SUBTITLES,
+                languageCode = translatedSub.languageCode,
+                audioTrackIndex = defaultAudioIndex,
+                subtitleTrackIndex = translatedSub.index,
+                summary = "Recommended: Translate ${translatedSub.languageLabel} subtitles (${translatedSub.label})",
+            )
+        }
+        val speechLang = preferredAudioTrack?.languageCode?.takeIf { it in listOf("hi", "ur", "ta") }
+            ?: preferredLanguage.takeIf { it in listOf("hi", "ur", "ta") } ?: "hi"
+        val langLabel = LANGUAGE_NAMES[speechLang] ?: "Hindi"
+        return SourceRecommendation(
+            path = RecommendedPath.SPEECH_RECOGNITION,
+            languageCode = speechLang,
+            audioTrackIndex = defaultAudioIndex,
+            summary = "Recommended: Speech recognition ($langLabel${preferredAudioTrack?.let { " · ${it.label}" }.orEmpty()})",
+        )
+    }
+
     fun extractor(context: Context, uri: Uri): MediaExtractor = MediaExtractor().apply {
         try { setDataSource(context, uri, null) } catch (e: Throwable) { release(); throw e }
     }
+
+    fun inspectTracks(context: Context, uri: Uri): List<MediaTrackInfo> {
+        val extractor = extractor(context, uri)
+        try {
+            var audioNumber = 0
+            var subtitleNumber = 0
+            val tracks = mutableListOf<MediaTrackInfo>()
+            for (index in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(index)
+                val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
+                val rawLang = format.getString(MediaFormat.KEY_LANGUAGE)
+                val (langCode, langLabel) = normalizeLanguage(rawLang)
+                val rawTitle = try { format.getString("title") ?: format.getString("name") } catch (_: Exception) { null }
+                if (mime.startsWith("audio/")) {
+                    audioNumber++
+                    val label = rawTitle?.takeIf { it.isNotBlank() } ?: "Audio track $audioNumber ($langLabel)"
+                    tracks += MediaTrackInfo(index, "audio", mime, langCode, langLabel, label)
+                } else if (mime in SUPPORTED_SUBTITLE_MIMES) {
+                    subtitleNumber++
+                    val label = rawTitle?.takeIf { it.isNotBlank() } ?: "Subtitle track $subtitleNumber ($langLabel)"
+                    tracks += MediaTrackInfo(index, "subtitles", mime, langCode, langLabel, label)
+                }
+            }
+            return tracks
+        } finally { extractor.release() }
+    }
+
     fun duration(context: Context, uri: Uri): Long {
         val metadata = MediaMetadataRetriever()
         try { metadata.setDataSource(context, uri); return metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0 }
         finally { metadata.release() }
     }
-    fun hasEnglishAudio(context: Context, uri: Uri): Boolean {
-        val extractor = extractor(context, uri)
-        try { return (0 until extractor.trackCount).any {
-            val format = extractor.getTrackFormat(it)
-            format.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true &&
-                format.getString(MediaFormat.KEY_LANGUAGE)?.lowercase()?.let { lang -> lang in listOf("en", "eng") || lang.startsWith("en-") } == true
-        } } finally { extractor.release() }
-    }
 
-    fun embeddedSubtitles(context: Context, uri: Uri, language: String): List<TextCue> {
+    fun hasEnglishAudio(context: Context, uri: Uri): Boolean =
+        inspectTracks(context, uri).any { it.kind == "audio" && it.languageCode == "en" }
+
+    fun embeddedSubtitles(context: Context, uri: Uri, language: String, subtitleTrackIndex: Int = -1): List<TextCue> {
         val extractor = extractor(context, uri)
         try {
-            val track = (0 until extractor.trackCount).firstOrNull {
-                val format = extractor.getTrackFormat(it)
-                val lang = format.getString(MediaFormat.KEY_LANGUAGE).orEmpty()
-                format.getString(MediaFormat.KEY_MIME) in listOf("application/x-subrip", "text/vtt", "text/3gpp") &&
-                    (lang.startsWith(language) || lang == mapOf("en" to "eng", "hi" to "hin", "ur" to "urd", "ta" to "tam")[language])
-            } ?: error("No supported embedded text subtitles were found for this language. Add an SRT or WebVTT file, or use speech recognition.")
+            val track = if (subtitleTrackIndex >= 0) {
+                require(subtitleTrackIndex < extractor.trackCount) { "Selected subtitle track ($subtitleTrackIndex) does not exist." }
+                val mime = extractor.getTrackFormat(subtitleTrackIndex).getString(MediaFormat.KEY_MIME)
+                require(mime in SUPPORTED_SUBTITLE_MIMES) { "Selected track ($subtitleTrackIndex) is not a supported text subtitle track." }
+                subtitleTrackIndex
+            } else {
+                (0 until extractor.trackCount).firstOrNull {
+                    val format = extractor.getTrackFormat(it)
+                    val (code, _) = normalizeLanguage(format.getString(MediaFormat.KEY_LANGUAGE))
+                    format.getString(MediaFormat.KEY_MIME) in SUPPORTED_SUBTITLE_MIMES && code == language
+                } ?: error("No supported embedded text subtitles were found for this language. Add an SRT or WebVTT file, or use speech recognition.")
+            }
             val mime = extractor.getTrackFormat(track).getString(MediaFormat.KEY_MIME)
             extractor.selectTrack(track)
             val buffer = ByteBuffer.allocate(256 * 1024)
@@ -79,12 +197,26 @@ object AudioTools {
         } finally { extractor.release() }
     }
 
-    suspend fun decodeChunks(context: Context, uri: Uri, fromMs: Long, emit: suspend (Long, ByteBuffer, Int, Double) -> Unit) {
+    suspend fun decodeChunks(
+        context: Context,
+        uri: Uri,
+        fromMs: Long,
+        untilMs: Long = Long.MAX_VALUE,
+        audioTrackIndex: Int = -1,
+        emit: suspend (Long, ByteBuffer, Int, Double) -> Unit,
+    ) {
         val extractor = extractor(context, uri)
         var codec: MediaCodec? = null
         try {
-            val track = (0 until extractor.trackCount).firstOrNull { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
-                ?: error("This video has no readable audio track.")
+            val track = if (audioTrackIndex >= 0) {
+                require(audioTrackIndex < extractor.trackCount) { "Selected audio track ($audioTrackIndex) is unavailable." }
+                val mime = extractor.getTrackFormat(audioTrackIndex).getString(MediaFormat.KEY_MIME)
+                require(mime?.startsWith("audio/") == true) { "Selected track ($audioTrackIndex) is not an audio track." }
+                audioTrackIndex
+            } else {
+                (0 until extractor.trackCount).firstOrNull { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
+                    ?: error("This video has no readable audio track.")
+            }
             val format = extractor.getTrackFormat(track)
             extractor.selectTrack(track)
             if (fromMs > 0) extractor.seekTo(fromMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
@@ -120,7 +252,8 @@ object AudioTools {
                     val index = codec.dequeueInputBuffer(10_000)
                     if (index >= 0) {
                         val input = codec.getInputBuffer(index)!!
-                        val n = extractor.readSampleData(input, 0)
+                        val sampleTimeMs = extractor.sampleTime / 1000
+                        val n = if (sampleTimeMs >= untilMs) -1 else extractor.readSampleData(input, 0)
                         if (n < 0) { codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM); eosInput = true }
                         else { codec.queueInputBuffer(index, 0, n, extractor.sampleTime, 0); extractor.advance() }
                     }
@@ -154,10 +287,11 @@ object AudioTools {
                         repeat(channels) { mono += if (bytes == 4) buffer.float else buffer.short / 32768f }
                         val timeMs = info.presentationTimeUs / 1000 + frame * 1000L / sampleRate
                         if (timeMs < fromMs) continue
+                        if (timeMs >= untilMs) { eosOutput = true; break }
                         resampler.sample(mono / channels) { sample -> chunk[chunkCount++] = sample }
                         if (chunkCount >= chunkSize) flushChunk()
                     }
-                    eosOutput = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) eosOutput = true
                     codec.releaseOutputBuffer(index, false)
                 }
             }

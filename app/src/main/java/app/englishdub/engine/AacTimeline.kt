@@ -5,18 +5,19 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import app.englishdub.data.SavedCue
-import java.io.BufferedInputStream
 import java.io.File
+import java.io.InputStream
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /** Feed silence and individual speech files into one AAC track without a movie-sized PCM file. */
 object AacTimeline {
     suspend fun encode(cues: List<SavedCue>, durationMs: Long, output: File, progress: suspend (Int) -> Unit) {
+        val activeCues = cues.filter { !it.subtitlesOnly && !it.pcmPath.isNullOrBlank() && it.spokenEndMs > it.spokenStartMs }
         val codec = MediaCodec.createEncoderByType("audio/mp4a-latm")
         var muxer: MediaMuxer? = null
         var muxerStarted = false
-        var speech: BufferedInputStream? = null
+        var speech: InputStream? = null
         try {
             val format = MediaFormat.createAudioFormat("audio/mp4a-latm", AudioTools.RATE, 1).apply {
                 setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
@@ -27,7 +28,7 @@ object AacTimeline {
             muxer = MediaMuxer(output.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             var track = -1
             var framesWritten = 0L
-            val totalFrames = maxOf(durationMs, cues.maxOfOrNull { it.spokenEndMs } ?: 0) * AudioTools.RATE / 1000
+            val totalFrames = maxOf(durationMs, activeCues.maxOfOrNull { it.spokenEndMs } ?: 0) * AudioTools.RATE / 1000
             require(totalFrames > 0) { "The video duration is unknown." }
             var cueIndex = 0
             var openedCue = -1
@@ -51,17 +52,23 @@ object AacTimeline {
                         var filled = 0
                         while (filled < count) {
                             val frame = framesWritten + filled
-                            while (cueIndex < cues.size && frame >= cues[cueIndex].spokenEndMs * AudioTools.RATE / 1000) { speech?.close(); speech = null; cueIndex++; openedCue = -1 }
-                            val cue = cues.getOrNull(cueIndex)
+                            while (cueIndex < activeCues.size && frame >= activeCues[cueIndex].spokenEndMs * AudioTools.RATE / 1000) {
+                                speech?.close(); speech = null; cueIndex++; openedCue = -1
+                            }
+                            val cue = activeCues.getOrNull(cueIndex)
                             val cueStart = cue?.spokenStartMs?.times(AudioTools.RATE)?.div(1000) ?: totalFrames
-                            if (cue == null || frame < cueStart) { filled += minOf(count - filled, (cueStart - frame).toInt().coerceAtLeast(1)); continue }
+                            if (cue == null || frame < cueStart) {
+                                filled += minOf(count - filled, (cueStart - frame).toInt().coerceAtLeast(1)); continue
+                            }
                             if (openedCue != cueIndex) {
-                                speech?.close(); speech = BufferedInputStream(File(cue.pcmPath!!).inputStream()); openedCue = cueIndex
+                                speech?.close()
+                                speech = CueAudioCache.openPcmStream(File(cue.pcmPath!!))
+                                openedCue = cueIndex
                             }
                             val cueEnd = cue.spokenEndMs * AudioTools.RATE / 1000
                             val availableFrames = minOf(count - filled, (cueEnd - frame).toInt())
-                            val read = speech!!.read(bytes, filled * 2, availableFrames * 2)
-                            if (read < 0) { filled += availableFrames } else { filled += read / 2 }
+                            val readFrames = readPcmFrames(speech!!, bytes, filled * 2, availableFrames)
+                            filled += if (readFrames <= 0) availableFrames else readFrames
                         }
                         buffer.put(bytes, 0, count * 2)
                         val flags = if (count == 0) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0
@@ -90,4 +97,17 @@ object AacTimeline {
             try { if (muxerStarted) muxer?.stop() } finally { muxer?.release() }
         }
     }
+
+    internal fun readPcmFrames(stream: InputStream, target: ByteArray, offsetBytes: Int, maxFrames: Int): Int {
+        val wantBytes = maxFrames * 2
+        var totalRead = 0
+        while (totalRead < wantBytes) {
+            val n = stream.read(target, offsetBytes + totalRead, wantBytes - totalRead)
+            if (n < 0) break
+            totalRead += n
+        }
+        if (totalRead % 2 != 0) target[offsetBytes + totalRead++] = 0
+        return totalRead / 2
+    }
 }
+

@@ -1,18 +1,22 @@
 {
-  "version": "0.2.1-preview",
-  "source_ref": "v0.2.1-preview",
+  "version": "0.3.0-preview",
+  "source_ref": "v0.3.0-preview",
   "date": "2026-11-07",
   "android_qa_workflow": "Autonom 0.36.1 sessions/screens/journal plus Test Android Apps emulator QA procedures",
   "preview": {
     "package": "app.englishdub.preview",
-    "version_code": 3,
+    "version_code": 4,
     "min_sdk": 26,
     "target_sdk": 36,
     "abi": [
       "arm64-v8a"
     ],
-    "bytes": 20248794,
-    "sha256": "c223f02a03d8a3c7feab0528f27a263114404a8c94821bfdb7ffe14994281802",
+    "bytes": 20297950,
+    "sha256": "2be21ac0203c6132767a5e341e901944eb52eb82eb9a989d247f3ad50ac7506a",
+    "release_unsigned_bytes": 20289742,
+    "release_unsigned_sha256": "dab92307dec723e48c68735d9fc828ec85ae8a43d4ef0df1c5e02f760358ded5",
+    "debug_bytes": 26691282,
+    "debug_sha256": "b47e92a8c67c36a75dd8e23f34ce8fc6e7a98bb204a03f88c63910a8a263b17f",
     "signature_v2": true,
     "zip_alignment_16kb": true,
     "all_native_load_alignment_16kb": true,
@@ -22,13 +26,13 @@
     "ui_smoke": "installed and library rendered on same API35 ARM64 emulator; separate preview package"
   },
   "jvm": {
-    "tests": 25,
+    "tests": 44,
     "failures": 0,
     "errors": 0
   },
   "lint": {
     "errors": 0,
-    "warnings": 37
+    "warnings": 56
   },
   "android_target": {
     "serial": "emulator-5554",
@@ -43,12 +47,13 @@
     "network": "airplane mode; Wi-Fi and data disabled"
   },
   "android_core": {
-    "tests": 9,
-    "passed": 9,
+    "tests": 11,
+    "passed": 11,
     "failed": 0,
     "skipped": 0,
-    "duration_seconds": 6.411,
+    "duration_seconds": 9.082,
     "includes_full_native_inference": true,
+    "includes_0_3_preview_and_rebuild": true,
     "log": "final/core.txt"
   },
   "playback_sync": {
@@ -59,7 +64,7 @@
     "passed": 4,
     "failed": 0,
     "skipped": 0,
-    "duration_seconds": 16.165,
+    "duration_seconds": 15.452,
     "samples": {
       "sync-overflow.csv": {
         "stable_samples": 0,

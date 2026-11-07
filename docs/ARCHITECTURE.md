@@ -4,46 +4,43 @@ EnglishDub is one Kotlin/Android Views application. It has no web runtime, accou
 
 ```mermaid
 flowchart TD
-    A[Local file or completed direct download] --> B[Probe audio tracks]
-    B -->|English audio| P[Hardware-decoded playback]
-    B -->|Prepare dub| C[Validate source and configuration]
-    C --> S[Text subtitles]
-    C --> R[Bounded audio decoding]
+    A[Local file or completed direct download] --> B[Inspect audio & text subtitle tracks]
+    B -->|Recommend & allow explicit override| C[Choose source, voice, & subtitle offset]
+    C -->|English audio selected| P[Hardware-decoded playback]
+    C -->|60s scene preview or full film| D[Stage-split preparation pipeline]
+    D --> S[Text subtitles + offset projection]
+    D --> R[Bounded audio decoding on selected track]
     S --> T[Optional on-device translation]
     R --> W[Optional Whisper speech-to-English]
-    W --> V[Offline English voice]
-    T --> V
-    V --> E[Stream AAC timeline to temporary file]
-    E --> F[Commit saved English track]
+    W --> G[Dialogue review, cue edits, pronunciations, song ranges]
+    T --> G
+    G --> V[Reusable compressed speech cache ≤256 MiB LRU]
+    V --> E[Incremental GZIP decode → AAC timeline]
+    E --> F[Atomic commit preserving previous playable dub]
     F --> P
+    F --> X[Export UTF-8 SRT or voice-only M4A]
 ```
 
 ## Boundaries
 
-- **UI:** a persistent header and RecyclerView library. Room emits library changes; a diff updates changed cards. Offline setup rebuilds only on navigation or completed setup operations. Status updates do not reconstruct the library.
-- **Admission:** `PreparationCoordinator` reserves a numbered owner before requesting Android service startup. A stale task cannot release a newer reservation. The service clears its running task before publishing idle and uses its start ID during shutdown.
-- **Recognition:** `DialogueRecognizer` owns a model and accepts an exclusively borrowed direct audio buffer. Decode/inference are sequential; cancellation aborts native work and joins it before closing model memory or reusing the buffer.
-- **Translation and speech:** `TextTranslator` and `VoiceSynthesizer` are narrow interfaces. Translators and TTS shut down before the AAC stage. Voice identity includes engine and voice selection.
-- **Audio:** MediaExtractor/MediaCodec decode only audio for recognition. Mono 16 kHz data is resampled incrementally in bounded 30-second windows. Source timestamps, gaps, and resume offsets are preserved.
-- **Encoding:** MediaCodec encodes fixed-rate mono AAC. Silence and individual speech files are fed incrementally into one audio timeline. No movie-sized PCM soundtrack or re-encoded video is produced.
-- **Playback:** video is the master clock; a second Media3 player handles the saved dub. Events synchronize immediately. A two-second settling interval uses 100 ms checks after startup, resume, seek, or speed changes; stable playback uses 250 ms checks. Paused/backgrounded players do not poll. The 150 ms clock target remains a device acceptance gate.
+- **UI:** a persistent header and RecyclerView library with `WRAP_CONTENT` accessible (`>=48dp`) controls supporting large system fonts and TalkBack. Room emits library and queue changes; a diff updates changed cards.
+- **Admission and queue:** `PreparationCoordinator` reserves a numbered owner before requesting Android service startup. `PreparationService` processes one film at a time and continues through eligible `queued` jobs within the active foreground session, pausing safely on user action, charger disconnect under charging-only mode, severe thermal status, or Android `onTimeout`.
+- **Media inspection and recommendation:** `AudioTools.inspectTracks` enumerates audio and supported text-subtitle tracks with ISO language normalization and an `"Unknown language"` fallback. `AudioTools.recommendSource` prioritizes existing English audio, English subtitles, translated subtitles (Hindi/Urdu/Tamil), and finally speech recognition, while honoring explicit user overrides and never silently switching audio tracks.
+- **Dialogue pipeline:** `DialoguePipeline` is decoupled from the Android `Service` lifecycle. It applies pronunciation replacements (`Pronunciation.apply`) to spoken text only (keeping normal spelling in captions and SRT exports), skips synthesis for `subtitlesOnly` cues and manual `PreservedRange` song sections, recalculates downstream cue placement (`DubTiming.place`), and commits timelines atomically so failed regeneration preserves the previous playable dub.
+- **Speech recognition and transcripts:** `DialogueRecognizer` owns a model and accepts an exclusively borrowed direct audio buffer. Speech-mode cues set `transcriptAvailable = false` so English translation output is never presented as an original-language transcript.
+- **Audio and encoding:** MediaExtractor/MediaCodec decode only the selected audio track in bounded 30-second windows (or a 60-second `PreviewRange`). `AacTimeline` incrementally decodes compressed `.pcm.gz` clips from `CueAudioCache` in 4 KiB buffers into a single mono AAC timeline.
+- **Playback:** video is the master clock; a second Media3 player handles the saved dub or 60-second scene preview. During `subtitlesOnly` cues and manual `PreservedRange` song sections, original audio plays at full volume (`1.0f`) while available English captions remain visible.
 
-## Durable work and caches
+## Durable work and stage-split caches
 
-Room schema version 2 adds nullable preparation and voice signatures through an explicit 1→2 migration. Existing completed entries remain watchable. Interrupted old jobs regenerate incompatible temporary work.
+Room schema version 3 (`MIGRATION_2_3`) upgrades version 1 and 2 databases in place, adding track indices, subtitle offsets, preview state, split stage signatures, queue order, charging-only flags, per-film viewing preferences, cue overrides (`editedEnglish`, `startOverrideMs`, `endOverrideMs`, `subtitlesOnly`, `transcriptAvailable`), `pronunciations`, and `preserved_ranges`.
 
-Recognition segments and the decoded offset commit together. Translated text and synthesized cue metadata commit at cue completion. Display progress can lag by up to about a second without losing completed recognition/cue work.
+Cache identities are split into four stages in `PreparationIdentity`:
+1. `recognition`: source identity, selected audio track, language, Whisper model hash, VAD hash, pipeline.
+2. `translation`: recognition/subtitle identity, subtitle track index, language, mode, translation engine.
+3. `speech`: spoken text (after pronunciation replacements), voice identity, speech rate, pipeline.
+4. `timeline`: effective cue timings, silence flags, spoken text, voice identity, duration, pipeline.
 
-The preparation signature includes sampled seekable source identity, subtitle content, source language, mode, recognition/model configuration, VAD setting, and pipeline version. Source identity samples the first and last 64 KiB plus URI, size, and available modification metadata; it is a cache identity check, not a full-file integrity hash. Non-seekable or unknown-size sources are not assumed reusable. Voice changes invalidate synthesized audio while preserving compatible recognition and translations.
+Changing caption visibility, caption text size, background volume, or playback position never invalidates any stage signature. Changing subtitle offsets, cue edits, pronunciations, or song ranges recalculates only affected speech clips and the final timeline without repeating speech recognition or unchanged translations.
 
-Translation memoization is limited to 128 entries. Speech files are scoped to one job and keyed by text, voice, pipeline, and rate. A completion marker and PCM length protect against using interrupted files. Scratch WAV/PCM data is deleted after final AAC commitment. Interrupted AAC encoding restarts from retained cue audio.
-
-## Resources and failure paths
-
-An existing English track returns before voice/model/storage preparation requirements. All other paths remain single-job. Large AI contexts close between stages; the shared object can remain mapped while its model allocations are freed.
-
-Time/byte gates reduce storage syscalls. Database writes update only progress/state columns during reporting. File write failures still stop work immediately. Disk estimates are approximate; generated speech length and filesystem quotas can differ from subtitle timing and advertised free space.
-
-User pause, session limits, Android service timeout, and severe thermal status save existing checkpoints and release foreground/wake-lock resources. Actual device behavior and unsupported flows are reported in validation rather than inferred from host builds.
-
-The vendored Whisper scheduler has a small, documented cancellation-propagation patch. See `app/src/main/cpp/vendor/whisper/ENGLISHDUB_PATCHES.md` when upgrading upstream.
+Reusable speech clips are stored in `files/speech-cache` as lossless `.pcm.gz` streams with a `.complete` marker recording uncompressed PCM length and compressed byte size. Storage is capped at 256 MiB by default using LRU eviction while protecting active-job clip paths. Legacy completed dubs remain playable; on their first edit, missing reusable speech clips are regenerated without re-running recognition or translation.

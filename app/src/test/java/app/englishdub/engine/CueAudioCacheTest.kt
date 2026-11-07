@@ -59,4 +59,40 @@ class CueAudioCacheTest {
             assertEquals("3200", File(directory, "$key.complete").readText())
         } finally { directory.deleteRecursively() }
     }
+    @Test fun `compressed reusable speech clips decode incrementally with exact samples`() = runBlocking {
+        val directory = Files.createTempDirectory("dub-cache-gz").toFile()
+        try {
+            var generated = 0
+            val cache = CueAudioCache.reusable(directory, "voice-en")
+            val first = cache.get("Namaste friend", 1f) { file, _ -> generated++; wave(file) }
+            val second = cache.get("Namaste friend", 1f) { file, _ -> generated++; wave(file) }
+            assertEquals(1, generated)
+            assertEquals(first, second)
+            assertTrue(first.file.name.endsWith(".pcm.gz"))
+            assertTrue(first.file.length() in 1..3199)
+            assertEquals(100L, first.durationMs)
+            val decoded = ByteArray(4096)
+            val frames = CueAudioCache.openPcmStream(first.file).use { stream ->
+                AacTimeline.readPcmFrames(stream, decoded, 0, 2000)
+            }
+            assertEquals(1600, frames)
+            val sample0 = ByteBuffer.wrap(decoded, 0, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
+            assertEquals(8192, sample0)
+        } finally { directory.deleteRecursively() }
+    }
+    @Test fun `LRU eviction respects byte cap and protects active job assets`() = runBlocking {
+        val directory = Files.createTempDirectory("dub-cache-lru").toFile()
+        try {
+            val cache = CueAudioCache(directory, "voice", compressed = false, maxBytes = 7000L)
+            val a = cache.get("Line A", 1f) { file, _ -> wave(file) }
+            val b = cache.get("Line B", 1f) { file, _ -> wave(file) }
+            // Access Line A so Line B becomes least-recently-used, then protect Line B as an active-job asset
+            cache.get("Line A", 1f) { file, _ -> wave(file) }
+            val c = cache.get("Line C", 1f, setOf(b.file.path)) { file, _ -> wave(file) }
+            assertTrue("Protected active-job clip B must survive eviction", b.file.exists())
+            assertTrue("Newly synthesized clip C must exist", c.file.exists())
+            assertFalse("Unprotected clip A must be evicted to stay within cap", a.file.exists())
+        } finally { directory.deleteRecursively() }
+    }
 }
+

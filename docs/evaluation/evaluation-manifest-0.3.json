@@ -1,0 +1,382 @@
+{
+  "version": "0.3.0-experimental",
+  "license": "CC-BY-4.0 / Apache-2.0 redistributable evaluation corpus specification",
+  "recognitionModel": {
+    "name": "ggml-base-q5_1.bin",
+    "sizeBytes": 59707625,
+    "sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "bundledLargerModel": false
+  },
+  "languageQualityStatus": "experimental",
+  "bilingualReviewRequired": true,
+  "requiredCategories": [
+    "clear_speech",
+    "quiet_dialogue",
+    "regional_accents",
+    "background_music",
+    "overlapping_speakers",
+    "english_code_switching"
+  ],
+  "clips": [
+    {
+      "id": "hi-01-clear-a",
+      "language": "hi",
+      "category": "clear_speech",
+      "durationMs": 4500,
+      "sourceTranscript": "ट्रेन शाम छह बजे स्टेशन से निकलेगी।",
+      "referenceEnglish": "The train will leave the station at six in the evening.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-02-clear-b",
+      "language": "hi",
+      "category": "clear_speech",
+      "durationMs": 4000,
+      "sourceTranscript": "कृपया दरवाज़ा बंद कर दीजिए और अंदर आइए।",
+      "referenceEnglish": "Please close the door and come inside.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-03-quiet-a",
+      "language": "hi",
+      "category": "quiet_dialogue",
+      "durationMs": 3800,
+      "sourceTranscript": "धीरे बोलो, कोई बाहर सुन रहा है।",
+      "referenceEnglish": "Speak softly, someone is listening outside.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-04-quiet-b",
+      "language": "hi",
+      "category": "quiet_dialogue",
+      "durationMs": 4200,
+      "sourceTranscript": "मुझे अभी तक उसका जवाब नहीं मिला।",
+      "referenceEnglish": "I still have not received an answer from him.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-05-accent-a",
+      "language": "hi",
+      "category": "regional_accents",
+      "durationMs": 5000,
+      "sourceTranscript": "वाराणसी के घाट पर सुबह आरती शुरू हो चुकी है।",
+      "referenceEnglish": "Morning aarti has started on the ghats of Varanasi.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": true, "inventedSpeech": false, "timingOverflowMs": 120 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 120, "pronunciationOverride": "Varanasi->Va-ra-na-si", "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-06-accent-b",
+      "language": "hi",
+      "category": "regional_accents",
+      "durationMs": 4800,
+      "sourceTranscript": "राघव ने कहा कि वह कल जयपुर पहुँचेगा।",
+      "referenceEnglish": "Raghav said that he will reach Jaipur tomorrow.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": true, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "pronunciationOverride": "Raghav->Raa-ghav", "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-07-music-a",
+      "language": "hi",
+      "category": "background_music",
+      "durationMs": 6000,
+      "sourceTranscript": "गीत के बीच में केवल यह एक संवाद सुनाई देता है।",
+      "referenceEnglish": "In the middle of the song only this single line of dialogue is heard.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": true, "timingOverflowMs": 240 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "manualSongRangePreserved": true, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-08-music-b",
+      "language": "hi",
+      "category": "background_music",
+      "durationMs": 5500,
+      "sourceTranscript": "संगीत तेज़ है फिर भी हम बात पूरी करेंगे।",
+      "referenceEnglish": "The music is loud, yet we will finish the conversation.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-09-overlap-a",
+      "language": "hi",
+      "category": "overlapping_speakers",
+      "durationMs": 3200,
+      "sourceTranscript": "रुको! अभी मत जाओ, पहले मेरी बात सुनो!",
+      "referenceEnglish": "Wait! Do not go yet, listen to me first!",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 310 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 310, "overflowFlaggedInReview": true, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-10-overlap-b",
+      "language": "hi",
+      "category": "overlapping_speakers",
+      "durationMs": 3500,
+      "sourceTranscript": "सच क्या है? तुम दोनों एक साथ क्यों बोल रहे हो?",
+      "referenceEnglish": "What is the truth? Why are both of you speaking at once?",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 210 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 140, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-11-codeswitch-a",
+      "language": "hi",
+      "category": "english_code_switching",
+      "durationMs": 4300,
+      "sourceTranscript": "मीटिंग का schedule कल सुबह confirm कर देना।",
+      "referenceEnglish": "Please confirm the meeting schedule tomorrow morning.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "hi-12-codeswitch-b",
+      "language": "hi",
+      "category": "english_code_switching",
+      "durationMs": 4100,
+      "sourceTranscript": "यह report बिल्कुल ready है, बस sign करना बाकी है।",
+      "referenceEnglish": "This report is completely ready, it only needs to be signed.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-01-clear-a",
+      "language": "ur",
+      "category": "clear_speech",
+      "durationMs": 4400,
+      "sourceTranscript": "ہم کل صبح لاہور کے لیے روانہ ہوں گے۔",
+      "referenceEnglish": "We will depart for Lahore tomorrow morning.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-02-clear-b",
+      "language": "ur",
+      "category": "clear_speech",
+      "durationMs": 4100,
+      "sourceTranscript": "براہ کرم کتاب میز پر رکھ دیں۔",
+      "referenceEnglish": "Please place the book on the table.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-03-quiet-a",
+      "language": "ur",
+      "category": "quiet_dialogue",
+      "durationMs": 3900,
+      "sourceTranscript": "آہستہ بولو، بچے سو رہے ہیں۔",
+      "referenceEnglish": "Speak quietly, the children are sleeping.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-04-quiet-b",
+      "language": "ur",
+      "category": "quiet_dialogue",
+      "durationMs": 4300,
+      "sourceTranscript": "اس کمرے میں روشنی بہت کم ہے۔",
+      "referenceEnglish": "There is very little light in this room.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-05-accent-a",
+      "language": "ur",
+      "category": "regional_accents",
+      "durationMs": 4900,
+      "sourceTranscript": "زینب نے کراچی سے خط بھیجا ہے۔",
+      "referenceEnglish": "Zainab has sent a letter from Karachi.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": true, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "pronunciationOverride": "Zainab->Zay-nab", "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-06-accent-b",
+      "language": "ur",
+      "category": "regional_accents",
+      "durationMs": 4700,
+      "sourceTranscript": "پشاور کا موسم آج بہت خوشگوار ہے۔",
+      "referenceEnglish": "The weather in Peshawar is very pleasant today.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": true, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "pronunciationOverride": "Peshawar->Pe-shaa-war", "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-07-music-a",
+      "language": "ur",
+      "category": "background_music",
+      "durationMs": 5800,
+      "sourceTranscript": "قوالی کے دوران اصل آواز محفوظ رکھی گئی ہے۔",
+      "referenceEnglish": "Original audio is preserved during the qawwali performance.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": true, "timingOverflowMs": 220 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "manualSongRangePreserved": true, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-08-music-b",
+      "language": "ur",
+      "category": "background_music",
+      "durationMs": 5200,
+      "sourceTranscript": "ساز کی آواز کے پیچھے مکالمہ مدھم ہے۔",
+      "referenceEnglish": "The dialogue is faint behind the sound of the instruments.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-09-overlap-a",
+      "language": "ur",
+      "category": "overlapping_speakers",
+      "durationMs": 3300,
+      "sourceTranscript": "ٹھہرو! پہلے میری پوری بات سن لو!",
+      "referenceEnglish": "Wait! Listen to everything I have to say first!",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 280 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 280, "overflowFlaggedInReview": true, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-10-overlap-b",
+      "language": "ur",
+      "category": "overlapping_speakers",
+      "durationMs": 3600,
+      "sourceTranscript": "ایک وقت میں ایک شخص بات کرے تاکہ سمجھ آئے۔",
+      "referenceEnglish": "Speak one person at a time so that it can be understood.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 190 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 110, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-11-codeswitch-a",
+      "language": "ur",
+      "category": "english_code_switching",
+      "durationMs": 4200,
+      "sourceTranscript": "فائل کو ابھی office میں submit کروانا ہے۔",
+      "referenceEnglish": "The file needs to be submitted at the office right now.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ur-12-codeswitch-b",
+      "language": "ur",
+      "category": "english_code_switching",
+      "durationMs": 4000,
+      "sourceTranscript": "ہماری flight وقت پر land کر چکی ہے۔",
+      "referenceEnglish": "Our flight has landed on time.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-01-clear-a",
+      "language": "ta",
+      "category": "clear_speech",
+      "durationMs": 4500,
+      "sourceTranscript": "நாளை காலை சென்னைக்கு ரயில் புறப்படும்.",
+      "referenceEnglish": "The train will depart for Chennai tomorrow morning.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-02-clear-b",
+      "language": "ta",
+      "category": "clear_speech",
+      "durationMs": 4100,
+      "sourceTranscript": "தயவுசெய்து உள்ளே வந்து உட்காருங்கள்.",
+      "referenceEnglish": "Please come inside and sit down.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-03-quiet-a",
+      "language": "ta",
+      "category": "quiet_dialogue",
+      "durationMs": 3700,
+      "sourceTranscript": "மெதுவாகப் பேசு, வெளியே யாரோ நிற்கிறார்கள்.",
+      "referenceEnglish": "Speak softly, someone is standing outside.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-04-quiet-b",
+      "language": "ta",
+      "category": "quiet_dialogue",
+      "durationMs": 4200,
+      "sourceTranscript": "அந்த கடிதம் இன்னும் என் கைக்கு வரவில்லை.",
+      "referenceEnglish": "That letter has still not reached my hands.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-05-accent-a",
+      "language": "ta",
+      "category": "regional_accents",
+      "durationMs": 4800,
+      "sourceTranscript": "மதுரை மீனாட்சி கோவிலுக்கு கார்த்திக் சென்றான்.",
+      "referenceEnglish": "Karthik went to the Madurai Meenakshi temple.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": true, "inventedSpeech": false, "timingOverflowMs": 90 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 90, "pronunciationOverride": "Madurai->Ma-du-rai", "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-06-accent-b",
+      "language": "ta",
+      "category": "regional_accents",
+      "durationMs": 4600,
+      "sourceTranscript": "கோயம்புத்தூரில் இன்று மழை பெய்கிறது.",
+      "referenceEnglish": "It is raining in Coimbatore today.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": true, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "pronunciationOverride": "Coimbatore->Koy-am-ba-toor", "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-07-music-a",
+      "language": "ta",
+      "category": "background_music",
+      "durationMs": 6000,
+      "sourceTranscript": "பாடல் பகுதியில் அசல் இசை அப்படியே ஒலிக்கிறது.",
+      "referenceEnglish": "During the song section the original music plays as is.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": true, "timingOverflowMs": 260 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "manualSongRangePreserved": true, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-08-music-b",
+      "language": "ta",
+      "category": "background_music",
+      "durationMs": 5400,
+      "sourceTranscript": "பின்னணி இசை அதிகமாக இருந்தாலும் வசனம் கேட்கிறது.",
+      "referenceEnglish": "Even though the background music is loud, the dialogue is audible.",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-09-overlap-a",
+      "language": "ta",
+      "category": "overlapping_speakers",
+      "durationMs": 3100,
+      "sourceTranscript": "நில்லுங்கள்! நான் சொல்வதை முதலில் கேளுங்கள்!",
+      "referenceEnglish": "Stop! Listen to what I am saying first!",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 290 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 290, "overflowFlaggedInReview": true, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-10-overlap-b",
+      "language": "ta",
+      "category": "overlapping_speakers",
+      "durationMs": 3500,
+      "sourceTranscript": "இருவரும் ஒரே நேரத்தில் பேசினால் எப்படிப் புரியும்?",
+      "referenceEnglish": "If both of you speak at the same time, how will anyone understand?",
+      "baseline021": { "missingMeaning": true, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 195 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 120, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-11-codeswitch-a",
+      "language": "ta",
+      "category": "english_code_switching",
+      "durationMs": 4200,
+      "sourceTranscript": "இந்த project-ஐ நாளைக்குள் complete செய்ய வேண்டும்.",
+      "referenceEnglish": "We must complete this project by tomorrow.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    },
+    {
+      "id": "ta-12-codeswitch-b",
+      "language": "ta",
+      "category": "english_code_switching",
+      "durationMs": 4000,
+      "sourceTranscript": "அவர் ticket book செய்துவிட்டு station-க்கு வந்தார்.",
+      "referenceEnglish": "He booked the ticket and came to the station.",
+      "baseline021": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0 },
+      "release030": { "missingMeaning": false, "incorrectNames": false, "inventedSpeech": false, "timingOverflowMs": 0, "bilingualReviewed": false }
+    }
+  ]
+}
