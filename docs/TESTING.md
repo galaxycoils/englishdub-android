@@ -1,6 +1,6 @@
-# Testing with Test Android Apps
+# Android testing with Autonom and Test Android Apps
 
-This project uses the **Test Android Apps** `android-emulator-qa` and `android-performance` skills for Android validation. The plugin supplies adb-driven procedures and profiling guidance; it does not provision a device automatically. Use only a connected, authorized adb target. Supporting JVM regressions and lint are part of the same validation workflow.
+The Mac continuation uses **Autonom** for explicit device sessions, UI trees, screenshots and the session journal, together with the **Test Android Apps** `android-emulator-qa` and `android-performance` skills for Android validation. The plugin supplies adb-driven procedures and profiling guidance; it does not provision a device automatically. Use only a connected, authorized adb target. Supporting JVM regressions and lint are part of the same validation workflow.
 
 ## Reproducible setup
 
@@ -9,7 +9,7 @@ Record the source revision, OS/API, ABI, RAM, device model, build variant, input
 ```sh
 adb devices -l
 ./gradlew :app:testDebugUnitTest :app:lintDebug
-./gradlew -Pdub.abi=x86 :app:assembleDebug :app:assembleDebugAndroidTest
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest # default ARM64; use -Pdub.abi=x86_64 for an Intel emulator
 adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s SERIAL install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb -s SERIAL shell am instrument -r -w \
@@ -17,7 +17,7 @@ adb -s SERIAL shell am instrument -r -w \
   -e notAnnotation androidx.test.filters.LargeTest \
   app.englishdub.test/androidx.test.runner.AndroidJUnitRunner
 adb -s SERIAL shell am instrument -r -w \
-  -e class app.englishdub.PlaybackSynchronizationTest \
+  -e class app.englishdub.PlaybackSynchronizationTest,app.englishdub.PlaybackRecoveryTest \
   app.englishdub.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
@@ -41,7 +41,7 @@ adb -s SERIAL shell am instrument -r -w \
 - Time/byte gating, bounded cache eviction, thread policy, pending-start admission, stale task completion, preparation signatures, and scratch estimates.
 - Speech-cache reuse across reopen, distinct voice/rate keys, incomplete PCM rejection, and retry after synthesis failure.
 - Android core instrumentation: real version 1 SQLite migration; source descriptor reopening; AAC silence/speech timing through platform codecs; installed offline voice synthesis; complete English subtitle preparation; English-audio bypass with missing AI packs; verified-model cancellation; Android ICU markup parsing including Tamil/Urdu text.
-- Playback instrumentation: video and dub clock advancement, ≤150 ms drift assertion, pause, seek and 1.25× speed. The test preserves a CSV of player positions/states in private `files/sync-samples.csv`, including failure paths. A player screenshot alone is not proof of successful decoding or synchronization.
+- Playback instrumentation: video and dub clock advancement, ≤150 ms drift assertion, pause, seek and 1.25× speed. Recovery tests also exercise delayed local AAC loading, repeated seeks without another Play command, latest-seek recovery at 1.25×, original/dub switching, and trailing audio over the last video frame. They retain both transition/event rows and stable samples in `sync-buffering.csv`, `sync-controls.csv`, and `sync-overflow.csv`. The original test preserves a CSV of player positions/states in private `files/sync-samples.csv`, including failure paths. A player screenshot alone is not proof of successful decoding or synchronization.
 - Separate full direct-buffer JNI transcription using the upstream JFK fixture when the model is supplied. Emulation may be prohibitively slow.
 
 A skipped native model test is not a recognition pass. Emulated English smoke results do not establish Hindi/Urdu/Tamil quality.
@@ -76,4 +76,30 @@ Targets: complete APK ≤21 MB, playback <250 MB PSS, preparation <800 MB PSS, a
 
 ## Results
 
-See `VALIDATION.md`, `docs/PERFORMANCE.md`, and `verification.json`. Preserve logs, test reports, screenshots, and profiler output with the tested revision. GitHub Actions builds artifacts; Test Android Apps remains the Android QA/profiling workflow.
+See `VALIDATION.md`, `docs/PERFORMANCE.md`, and `verification.json`. Preserve logs, test reports, screenshots, and profiler output with the tested revision. GitHub Actions builds artifacts. See [Mac validation](validation/MAC-2026-11-07.md) for Autonom sessions and [fixture provenance](TEST-FIXTURES.md) for the committed test WAV.
+
+## Mac setup and Autonom
+
+```sh
+source scripts/mac-env.sh
+autonom doctor
+autonom devices
+autonom session start --serial SERIAL --app-id app.englishdub
+autonom session launch app.englishdub
+autonom ui tree --format outline
+autonom screenshot --task playback-sync --label library
+# Run the instrumentation commands above with the same adb serial.
+autonom note add "Record exact test pass/fail/skip counts here" --task playback-sync
+autonom journal
+autonom session stop
+```
+
+Install the official CLI separately following https://autonom.yatsuk.me/docs/install/;
+the plugin contains skills, not the CLI. The configured Mac uses Python 3.13.17
+and Autonom 0.36.1. No interception or proxy is needed for these offline tests.
+
+On the handoff Mac, adb 37.0.1 intermittently aborted in host `libunwind`.
+A separately downloaded official platform-tools 35.0.2 installation under
+`~/.local/share/englishdub-tools/platform-tools-35.0.2/platform-tools` worked.
+The helper selects that fallback when present; set `DUB_ADB_DIR` to override it.
+This does not replace the SDK's platform-tools installation.

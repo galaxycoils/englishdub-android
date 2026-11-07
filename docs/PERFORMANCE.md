@@ -18,7 +18,7 @@ EnglishDub 0.2 reduces avoidable work. These changes do not establish a measured
 
 The base model itself is still substantial. Loading a smaller quantized model does not make speech recognition inexpensive. Subtitle preparation is the preferred low-resource path. VAD remains optional and off until quality is established.
 
-## Captured environment
+## Historical 0.2.0 software-emulator environment
 
 Android QA followed the Test Android Apps `android-emulator-qa` and `android-performance` skills: adb UI trees, screenshots, logcat, instrumentation, memory snapshots and Simpleperf. The target was Android 8 / API 26 x86 with approximately 1.5 GiB emulated RAM, software CPU emulation, and no KVM. It is not a budget-phone benchmark. The distribution APK is ARM64; the emulator used an explicitly selected x86 debug build.
 
@@ -27,6 +27,15 @@ The initial CPU trace used an unoptimized native debug library. A 15-second fram
 During that initial recognition attempt, meminfo snapshots showed total PSS of 130,621 and 135,127 KiB. These are two sampled points, not a measured peak, leak assessment, or proof of the <800 MB target. API 26 did not provide Perfetto; the bundled Simpleperf required PID targeting and frame-pointer unwinding.
 
 The final isolated navigation capture sampled 30,248 KiB PSS in the library, 34,925 KiB after returning from setup, and 44,999 KiB after opening the prepared player. These are single debug emulator observations. The player capture includes buffering and does not establish stable playback memory or a phone result. The associated UI trees and screenshots confirm the requested pages opened; the final crash buffer was empty.
+
+## Mac continuation
+
+The 0.2.1 continuation uses an API 35 ARM64 emulator accelerated through Apple's
+Hypervisor.Framework. The original strict clock test and additional real-player
+recovery tests pass with the 150 ms limit retained. Full native JFK inference
+also passes. This resolves a seek-resume callback bug, not a physical-phone
+battery, throughput or peak-memory acceptance gate. Detailed samples and exact
+build results are in [Mac validation](validation/MAC-2026-11-07.md).
 
 ## Acceptance gates
 
@@ -39,7 +48,7 @@ The final isolated navigation capture sampled 30,248 KiB PSS in the library, 34,
 | Real battery/thermal improvement | Unmeasured; no percentage or runtime claim |
 | Hindi/Urdu/Tamil quality | Representative clips and bilingual review pending |
 
-Full base-model Android transcription exceeded the practical four-minute software-emulator capture budget, even with optimized debug kernels. It is unverified, not a pass. A verified-model pre-abort regression does pass and confirms clean error/close handling; it does not substitute for a full transcription run.
+In that historical software-emulator run, full base-model Android transcription exceeded the practical four-minute software-emulator capture budget, even with optimized debug kernels. It was unverified in that run, not a pass. The 0.2.1 accelerated ARM64 native smoke test now passes; see the current validation report. This is still not a phone benchmark. A verified-model pre-abort regression does pass and confirms clean error/close handling; it does not substitute for a full transcription run.
 
 ## Reproduce before making a claim
 

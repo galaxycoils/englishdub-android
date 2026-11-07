@@ -2,9 +2,9 @@
 
 A native Android player that prepares an English voice track on your phone, then reuses it while you watch. Designed for low resource use on budget and midrange phones.
 
-**Status: 0.2.0 preview.** Hindi, Urdu, and Tamil are the initial translation paths. Language quality, battery use, and phone memory targets require device validation. This is an offline preparation app: speech recognition may take longer than the film on a slow phone.
+**Status: 0.2.1 preview.** Hindi, Urdu, and Tamil are the initial translation paths. Language quality, battery use, and phone memory targets require device validation. This is an offline preparation app: speech recognition may take longer than the film on a slow phone.
 
-The strict 150 ms playback clock test currently fails on the software emulator; physical-phone synchronization is still unverified. See [validation](VALIDATION.md) before treating this preview as ready for regular viewing.
+The strict 150 ms playback clock test and buffering/seek recovery tests pass on the accelerated ARM64 emulator. Physical-phone synchronization is still unverified; the older software x86 failure is retained in the evidence. See [validation](VALIDATION.md) before treating this preview as ready for regular viewing.
 
 ## Choose the lightest path
 
@@ -72,13 +72,13 @@ Preparation also needs temporary speech files. The app estimates remaining space
 
 ## Build from source
 
-Requirements: JDK 17, SDK platform 36, Build Tools 35, NDK `27.2.12479018`, and CMake `3.22.1`. Set `ANDROID_HOME` or an untracked `local.properties` containing `sdk.dir=...`. The Gradle 8.11.1 wrapper includes the official distribution checksum.
+Requirements: JDK 17, SDK platform 36, Build Tools 35, NDK `27.2.12479018`, and CMake `3.22.1`. On the configured handoff Mac, run `source scripts/mac-env.sh` first. Set `ANDROID_HOME` or an untracked `local.properties` containing `sdk.dir=...`. The Gradle 8.11.1 wrapper includes the official distribution checksum.
 
 ```sh
 ./gradlew :app:assemblePreview
 ```
 
-Output: `app/build/outputs/apk/preview/app-preview.apk`. The preview ID is `app.englishdub.preview`; its version code is 2. The optimized preview is signed with the local debug key. Keep the original preview key to install updates over earlier previews. Never use it for production publication.
+Output: `app/build/outputs/apk/preview/app-preview.apk`. The preview ID is `app.englishdub.preview`; its version code is 3. The Mac preview is signed with this Mac’s local debug key. The original cloud preview key was not transferred, so this APK cannot update the old cloud-signed preview in place. It can update previews signed on this Mac. Keep existing app data until you have exported anything you need; do not uninstall merely to resolve a signer mismatch. Never use this key for production publication.
 
 ```sh
 ./gradlew :app:assembleRelease

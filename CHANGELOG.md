@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 preview
+
+- Preserve playback intent across delayed Media3 pause/resume callbacks after seeking or buffering.
+- Add decoder-backed regressions for a stalled dub, repeated seeks, pause/resume, original/dub switching, and final speech overflow; retain the original 150 ms assertion.
+- Include the generated JFK WAV explicitly in instrumentation assets so full native inference runs in fresh checkouts.
+- Add a Mac environment helper, ARM64 Autonom evidence, and separate historical/current validation records.
+- Fix GitHub Actions SDK installation after Google removed the obsolete `tools` package.
+- Publish source and complete history to `galaxycoils/englishdub-android`.
+- Version code 3; Mac preview uses a new local debug signer, without continuity with the old cloud signer.
+
 ## 0.2.0 preview
 
 - Recycled library cards and independent progress updates.

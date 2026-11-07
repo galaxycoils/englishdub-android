@@ -12,8 +12,8 @@ android {
         applicationId = "app.englishdub"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += "en"
         ndk { abiFilters += providers.gradleProperty("dub.abi").getOrElse("arm64-v8a").split(',') }
@@ -42,7 +42,6 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isReturnDefaultValues = true }
-    sourceSets.getByName("androidTest").assets.srcDir("src/main/cpp/vendor/whisper/samples")
     lint { abortOnError = true }
 }
 

@@ -1,23 +1,25 @@
 {
-  "version": "0.2.0-preview",
-  "android_qa_workflow": "Test Android Apps: android-emulator-qa and android-performance",
+  "version": "0.2.1-preview",
+  "source_ref": "v0.2.1-preview",
+  "date": "2026-11-07",
+  "android_qa_workflow": "Autonom 0.36.1 sessions/screens/journal plus Test Android Apps emulator QA procedures",
   "preview": {
     "package": "app.englishdub.preview",
-    "version_code": 2,
+    "version_code": 3,
     "min_sdk": 26,
     "target_sdk": 36,
     "abi": [
       "arm64-v8a"
     ],
     "bytes": 20248794,
-    "sha256": "6bdfb69b58495e10956592815c04b90a6f6e9967ab24b58478ba6393b72809fd",
+    "sha256": "ccd1869b4fac072c8ad7e4d1ef355fa44a1d624b0ba3fd9ab663e07c11503e21",
     "signature_v2": true,
     "zip_alignment_16kb": true,
     "all_native_load_alignment_16kb": true,
-    "same_signer_as_0_1_preview": true,
-    "signing": "local debug signer; not a production key"
+    "same_signer_as_0_2_0_cloud_preview": false,
+    "signer_certificate_sha256": "7c72a527b19dc406429ad68096fde910be946de674c334960306f6fe1ee93283",
+    "signing": "new Mac local debug signer; not a production key"
   },
-  "baseline_preview_bytes": 20629186,
   "jvm": {
     "tests": 25,
     "failures": 0,
@@ -28,61 +30,95 @@
     "warnings": 37
   },
   "android_target": {
-    "api": 26,
-    "os": "Android 8",
-    "abi": "x86",
-    "emulated_ram_mib": 1536,
-    "acceleration": "software TCG, no KVM",
-    "build": "debug, native kernels optimized -O2",
-    "tts": "separately installed eSpeak NG 1.52.0",
+    "serial": "emulator-5554",
+    "avd": "EnglishDub_API35_ARM64",
+    "api": 35,
+    "os": "Android 15",
+    "abi": "arm64-v8a",
+    "emulated_ram_mib": 2560,
+    "acceleration": "Apple Hypervisor.Framework",
+    "build": "debug with optimized native kernels",
+    "tts": "official eSpeak NG 1.52.0",
     "network": "airplane mode; Wi-Fi and data disabled"
   },
   "android_core": {
-    "tests": 8,
-    "passed": 8,
+    "tests": 9,
+    "passed": 9,
     "failed": 0,
     "skipped": 0,
-    "duration_seconds": 95.928,
-    "log": "instrumentation-core-final.txt"
+    "duration_seconds": 6.411,
+    "includes_full_native_inference": true,
+    "log": "final/core.txt"
   },
   "playback_sync": {
-    "status": "failed on software emulator",
+    "status": "passed on accelerated ARM64 emulator",
     "target_ms": 150,
-    "observed_drift_ms": 886,
-    "notes": "state CSV shows repeated buffering; pause/seek/speed assertions were not reached after the initial drift failure; physical ARM64 result unverified",
-    "log": "playback-state-diagnostic.txt"
+    "maximum_sampled_stable_drift_ms": 53,
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 16.165,
+    "samples": {
+      "sync-overflow.csv": {
+        "stable_samples": 0,
+        "max_stable_drift_ms": null,
+        "transition_samples": 64
+      },
+      "sync-buffering.csv": {
+        "stable_samples": 12,
+        "max_stable_drift_ms": 41,
+        "transition_samples": 31
+      },
+      "sync-controls.csv": {
+        "stable_samples": 48,
+        "max_stable_drift_ms": 53,
+        "transition_samples": 69
+      },
+      "sync-samples.csv": {
+        "stable_samples": 8,
+        "max_stable_drift_ms": 26,
+        "transition_samples": 5
+      }
+    },
+    "notes": "Original strict test unchanged. Transition/event rows retained separately. Trailing audio is expected to advance beyond the final video frame.",
+    "log": "final/playback.txt"
+  },
+  "reproduced_bug": {
+    "baseline": "cb0f341eb96dfd3996a7013d059c81695159ce9f",
+    "recovery_tests": 3,
+    "baseline_passed": 1,
+    "baseline_failed": 2,
+    "failure": "deferred synchronization pause callbacks erase playback intent; repeated-seek and trailing-dub scenarios hang",
+    "fix": "queue internal play state acknowledgements until their callbacks arrive"
   },
   "full_android_whisper_transcription": {
-    "status": "resource-limited; not counted as a pass",
-    "notes": "quantized base JFK fixture did not complete within a practical 4-minute software-emulator capture budget; pre-aborted verified-model call passes in core tests"
-  },
-  "profile": {
-    "status": "diagnostic initial unoptimized debug capture",
-    "samples": 2894,
-    "lost": 0,
-    "capture_seconds": 15,
-    "cpu_seconds": 14.47,
-    "preparation_pss_kib_snapshots": [
-      130621,
-      135127
-    ],
-    "peak_pss": "unmeasured"
-  },
-  "physical_phone_targets": "unverified: playback/preparation memory, battery, temperature and stable sync",
-  "language_quality": "Hindi/Urdu/Tamil implementation paths present; offline end-to-end and bilingual reference review pending",
-  "github": {
-    "approved_repository": "galaxycoils/englishdub-android",
-    "status": "creation blocked by integration permissions, HTTP 403; not published"
+    "status": "passed English JFK direct-buffer recognition smoke test",
+    "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    "notes": "Exact base Q5_1 model; checks country and americans. Not source-language quality or preparation throughput."
   },
   "android_ui": {
-    "status": "passed: library to offline setup to library and prepared-player opening",
-    "capture": "navigation-isolated",
+    "status": "library/setup/library/player captured; offline voice check exercised",
+    "session_id": "s_a4dae4a4b2",
     "crash_buffer_bytes": 0,
     "pss_kib_snapshots": {
-      "library": 30248,
-      "library_return": 34925,
-      "player_open": 44999
+      "library": 61944,
+      "player_open_ended": 89666
     },
-    "notes": "single debug emulator snapshots; player opening does not establish smooth synchronized playback"
+    "notes": "Diagnostic snapshots only, not peaks or phone performance acceptance. Player screenshot is at end of six-second fixture."
+  },
+  "physical_phone_targets": "unverified: synchronization, preparation/playback peak memory, battery, temperature, throughput",
+  "language_quality": "Hindi/Urdu/Tamil end-to-end and bilingual reference review remain unverified",
+  "historical_0_2_0": {
+    "report": "docs/validation/VALIDATION-0.2.0.md",
+    "verification": "docs/validation/verification-0.2.0.json",
+    "software_x86_sync_failure_ms": 886,
+    "rerun_on_same_environment": false,
+    "notes": "Original accelerated ARM64 baseline also passes strict test (11 ms); do not relabel historical software x86 failure as passed."
+  },
+  "github": {
+    "approved_repository": "galaxycoils/englishdub-android",
+    "url": "https://github.com/galaxycoils/englishdub-android",
+    "status": "published with full restored history"
   }
 }

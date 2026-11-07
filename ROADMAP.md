@@ -3,7 +3,7 @@
 ## Preview acceptance
 
 - Complete Test Android Apps emulator/device flows and publish evidence.
-- Resolve the software-emulator clock regression and verify the 150 ms synchronization target on physical ARM64 devices before production acceptance.
+- Re-test the historical software x86 clock failure after the seek-resume callback fix; accelerated ARM64 sync/recovery checks pass. Verify the 150 ms target on physical ARM64 devices before production acceptance.
 - Compare baseline and optimized builds on a 3–4 GB budget phone and a 6–8 GB midrange phone.
 - Review Hindi, Urdu, and Tamil reference samples, especially quiet/overlapping dialogue and music.
 - Keep VAD off by default until quality and processing-time evidence support enabling it.

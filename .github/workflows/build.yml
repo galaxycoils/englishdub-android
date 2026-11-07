@@ -28,12 +28,13 @@ jobs:
       - name: Install pinned Android tools
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
       - name: Compile application and Android test artifacts
-        run: ./gradlew --no-daemon :app:assembleRelease :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug
+        run: ./gradlew --no-daemon :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug
       - uses: actions/upload-artifact@v4
         with:
           name: unsigned-android-build
           path: |
             app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/androidTest/debug/*.apk
             app/build/reports/tests/testDebugUnitTest/**
             app/build/reports/lint-results-debug.*

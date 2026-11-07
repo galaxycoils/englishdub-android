@@ -37,7 +37,9 @@ class PlayerActivity : ComponentActivity() {
     private var english = true
     private var backgroundVolume = 0.15f
     private var active = false
-    private var internalChange = false
+    // Listener callbacks can be deferred while another listener event is dispatching.
+    // A stack-scoped guard cannot identify our own pause/resume acknowledgements.
+    private val pendingPlayChanges = ArrayDeque<Boolean>()
     private var waitingForDub = false
     private val handler = Handler(Looper.getMainLooper())
     private var seekAt = 0L
@@ -119,7 +121,8 @@ class PlayerActivity : ComponentActivity() {
                 override fun onEvents(player: Player, events: Player.Events) { synchronize(); scheduleTick() }
                 override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) { seekAt = android.os.SystemClock.elapsedRealtime(); synchronize(force = true); scheduleTick() }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                    if (!internalChange && !playWhenReady) waitingForDub = false
+                    if (pendingPlayChanges.firstOrNull() == playWhenReady) pendingPlayChanges.removeFirst()
+                    else if (!playWhenReady) waitingForDub = false
                     if (playWhenReady) seekAt = android.os.SystemClock.elapsedRealtime()
                 }
                 override fun onPlaybackStateChanged(playbackState: Int) {
@@ -151,6 +154,12 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private var syncing = false
+    private fun setMasterPlaying(playing: Boolean) {
+        val master = video ?: return
+        if (master.playWhenReady == playing) return
+        pendingPlayChanges.addLast(playing)
+        master.playWhenReady = playing
+    }
     private fun synchronize(force: Boolean = false) {
         if (syncing) return
         val master = video ?: return
@@ -160,28 +169,26 @@ class PlayerActivity : ComponentActivity() {
         try {
             if (!english) {
                 secondary.pause(); master.volume = 1f; caption.text = "Original audio"
-                if (waitingForDub) { waitingForDub = false; master.play() }
+                if (waitingForDub) { waitingForDub = false; setMasterPlaying(true) }
                 return
             }
             val atVideoEnd = master.playbackState == Player.STATE_ENDED
             val drifted = master.isPlaying && !atVideoEnd && DubTiming.needsResync(master.currentPosition, secondary.currentPosition)
             if (force || drifted) {
                 val resume = master.playWhenReady || waitingForDub
-                internalChange = true
                 if (secondary.playWhenReady) secondary.pause()
-                if (master.playWhenReady) master.pause()
                 waitingForDub = resume
+                setMasterPlaying(false)
                 // Freeze the master first: decoder seek latency must not move the target away.
                 secondary.seekTo(master.currentPosition)
                 seekAt = android.os.SystemClock.elapsedRealtime()
-                internalChange = false
             }
             if (secondary.playbackParameters != master.playbackParameters) secondary.playbackParameters = master.playbackParameters
             val dubWaiting = secondary.playbackState == Player.STATE_BUFFERING
             if (dubWaiting && master.playWhenReady) {
-                waitingForDub = true; internalChange = true; master.pause(); internalChange = false
+                waitingForDub = true; setMasterPlaying(false)
             } else if (!dubWaiting && waitingForDub) {
-                waitingForDub = false; internalChange = true; master.play(); internalChange = false
+                waitingForDub = false; setMasterPlaying(true)
             }
             val shouldPlay = master.playWhenReady && (master.isPlaying || atVideoEnd) && secondary.playbackState != Player.STATE_ENDED
             if (secondary.playWhenReady != shouldPlay) secondary.playWhenReady = shouldPlay
@@ -194,7 +201,7 @@ class PlayerActivity : ComponentActivity() {
             if (master.volume != volume) master.volume = volume
             val text = cue?.english.orEmpty()
             if (caption.text.toString() != text) caption.text = text
-        } finally { syncing = false; internalChange = false }
+        } finally { syncing = false }
     }
     override fun onStart() { super.onStart(); active = true; if (job != null) openPlayers() }
     override fun onStop() {
@@ -205,6 +212,7 @@ class PlayerActivity : ComponentActivity() {
         val oldDub = dub; val oldVideo = video
         dub = null; video = null
         oldDub?.release(); oldVideo?.release()
+        pendingPlayChanges.clear()
         super.onStop()
     }
     override fun onSaveInstanceState(outState: Bundle) {

@@ -1,0 +1,88 @@
+{
+  "version": "0.2.0-preview",
+  "android_qa_workflow": "Test Android Apps: android-emulator-qa and android-performance",
+  "preview": {
+    "package": "app.englishdub.preview",
+    "version_code": 2,
+    "min_sdk": 26,
+    "target_sdk": 36,
+    "abi": [
+      "arm64-v8a"
+    ],
+    "bytes": 20248794,
+    "sha256": "6bdfb69b58495e10956592815c04b90a6f6e9967ab24b58478ba6393b72809fd",
+    "signature_v2": true,
+    "zip_alignment_16kb": true,
+    "all_native_load_alignment_16kb": true,
+    "same_signer_as_0_1_preview": true,
+    "signing": "local debug signer; not a production key"
+  },
+  "baseline_preview_bytes": 20629186,
+  "jvm": {
+    "tests": 25,
+    "failures": 0,
+    "errors": 0
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 37
+  },
+  "android_target": {
+    "api": 26,
+    "os": "Android 8",
+    "abi": "x86",
+    "emulated_ram_mib": 1536,
+    "acceleration": "software TCG, no KVM",
+    "build": "debug, native kernels optimized -O2",
+    "tts": "separately installed eSpeak NG 1.52.0",
+    "network": "airplane mode; Wi-Fi and data disabled"
+  },
+  "android_core": {
+    "tests": 8,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 95.928,
+    "log": "instrumentation-core-final.txt"
+  },
+  "playback_sync": {
+    "status": "failed on software emulator",
+    "target_ms": 150,
+    "observed_drift_ms": 886,
+    "notes": "state CSV shows repeated buffering; pause/seek/speed assertions were not reached after the initial drift failure; physical ARM64 result unverified",
+    "log": "playback-state-diagnostic.txt"
+  },
+  "full_android_whisper_transcription": {
+    "status": "resource-limited; not counted as a pass",
+    "notes": "quantized base JFK fixture did not complete within a practical 4-minute software-emulator capture budget; pre-aborted verified-model call passes in core tests"
+  },
+  "profile": {
+    "status": "diagnostic initial unoptimized debug capture",
+    "samples": 2894,
+    "lost": 0,
+    "capture_seconds": 15,
+    "cpu_seconds": 14.47,
+    "preparation_pss_kib_snapshots": [
+      130621,
+      135127
+    ],
+    "peak_pss": "unmeasured"
+  },
+  "physical_phone_targets": "unverified: playback/preparation memory, battery, temperature and stable sync",
+  "language_quality": "Hindi/Urdu/Tamil implementation paths present; offline end-to-end and bilingual reference review pending",
+  "github": {
+    "approved_repository": "galaxycoils/englishdub-android",
+    "status": "creation blocked by integration permissions, HTTP 403; not published"
+  },
+  "android_ui": {
+    "status": "passed: library to offline setup to library and prepared-player opening",
+    "capture": "navigation-isolated",
+    "crash_buffer_bytes": 0,
+    "pss_kib_snapshots": {
+      "library": 30248,
+      "library_return": 34925,
+      "player_open": 44999
+    },
+    "notes": "single debug emulator snapshots; player opening does not establish smooth synchronized playback"
+  }
+}
