@@ -1,0 +1,2 @@
+-keep class app.englishdub.engine.WhisperBridge { *; }
+-keep class app.englishdub.engine.WhisperBridge$* { *; }

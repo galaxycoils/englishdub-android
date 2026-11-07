@@ -1,0 +1,14 @@
+{
+  "unit_tests": 14,
+  "unit_test_failures": 0,
+  "lint_errors": 0,
+  "lint_warnings": 30,
+  "preview_apk_bytes": 20629186,
+  "apk_signature_v2": true,
+  "zip_alignment_16kb": true,
+  "native_elf_alignment_16kb": true,
+  "whisper_host_smoke_test": "passed: upstream English JFK sample, translate mode, two threads",
+  "device_tests": "not run: no Android device attached; KVM unavailable",
+  "resource_targets": "unverified on phones",
+  "languages": "Hindi/Urdu/Tamil paths implemented; bilingual device review pending"
+}
