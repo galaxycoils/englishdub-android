@@ -204,6 +204,31 @@ internal fun Context.divider() = View(this).apply {
     }
 }
 
+internal fun Context.scrollable(child: View) = ScrollView(this).apply {
+    isFillViewport = true
+    addView(child)
+}
+
+internal fun equalizeRowHeights(row: LinearLayout) {
+    row.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        var maxH = 0
+        for (i in 0 until row.childCount) {
+            val c = row.getChildAt(i)
+            if (c.visibility == View.VISIBLE && c.height > maxH) maxH = c.height
+        }
+        if (maxH > 0) {
+            for (i in 0 until row.childCount) {
+                val c = row.getChildAt(i)
+                if (c is Button && c.visibility == View.VISIBLE && c.height in 1 until maxH) {
+                    c.minHeight = maxH
+                    c.minimumHeight = maxH
+                    c.post { c.requestLayout() }
+                }
+            }
+        }
+    }
+}
+
 internal fun LinearLayout.addTwoColumnRow(left: View, right: View) {
     val pair = context.row().apply {
         gravity = Gravity.CENTER_VERTICAL
@@ -220,9 +245,11 @@ internal fun LinearLayout.addTwoColumnRow(left: View, right: View) {
     }
     pair.addView(left)
     pair.addView(right)
+    equalizeRowHeights(pair)
     addView(pair)
 }
 
 internal fun LinearLayout.gap(height: Int) =
     addView(View(context), LinearLayout.LayoutParams(1, context.dp(height)))
+
 

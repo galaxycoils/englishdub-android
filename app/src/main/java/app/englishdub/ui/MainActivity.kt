@@ -131,12 +131,11 @@ class MainActivity : ComponentActivity() {
             clipToPadding = false
             setPadding(0, dp(4), 0, dp(16))
         }
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val shell = column().apply {
             setBackgroundColor(canvasColor)
-            setPadding(dp(20), dp(10), dp(20), dp(8))
+            setPadding(dp(20), dp(if (isLandscape) 6 else 10), dp(20), dp(if (isLandscape) 4 else 8))
         }
-        shell.addView(eyebrow("OFFLINE FILM DUBBING · v0.3"))
-        shell.addView(label("EnglishDub", 28f, ink, true))
 
         val tabs = row().apply {
             setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -144,13 +143,6 @@ class MainActivity : ComponentActivity() {
                 setColor(cardColor)
                 cornerRadius = dp(14).toFloat()
                 setStroke(dp(1), borderSubtle)
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                topMargin = dp(8)
-                bottomMargin = dp(6)
             }
         }
         libraryTabButton = button("Library") { offline = false; render() }.apply {
@@ -164,7 +156,37 @@ class MainActivity : ComponentActivity() {
         }
         tabs.addView(libraryTabButton)
         tabs.addView(offlineTabButton)
-        shell.addView(tabs)
+        equalizeRowHeights(tabs)
+
+        if (isLandscape) {
+            val headerBar = row().apply {
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = dp(4) }
+            }
+            val titleCol = column().apply {
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(12) }
+                addView(eyebrow("OFFLINE FILM DUBBING · v0.3"))
+                addView(label("EnglishDub", 22f, ink, true))
+            }
+            tabs.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.15f)
+            headerBar.addView(titleCol)
+            headerBar.addView(tabs)
+            shell.addView(headerBar)
+        } else {
+            shell.addView(eyebrow("OFFLINE FILM DUBBING · v0.3"))
+            shell.addView(label("EnglishDub", 28f, ink, true))
+            tabs.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(6)
+            }
+            shell.addView(tabs)
+        }
 
         statusLabel = label("", 14f, mint, true)
         statusProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -209,7 +231,12 @@ class MainActivity : ComponentActivity() {
         setContentView(shell)
         ViewCompat.setOnApplyWindowInsetsListener(shell) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(dp(20) + bars.left, dp(10) + bars.top, dp(20) + bars.right, dp(8) + bars.bottom)
+            view.setPadding(
+                dp(20) + bars.left,
+                dp(if (isLandscape) 6 else 10) + bars.top,
+                dp(20) + bars.right,
+                dp(if (isLandscape) 4 else 8) + bars.bottom,
+            )
             insets
         }
         lifecycleScope.launch {
@@ -633,7 +660,7 @@ class MainActivity : ComponentActivity() {
         if (!checkIdleUi()) return
         lifecycleScope.launch { guarded {
             val dbCues = app.jobs.cues(job.id)
-            val allCues = if (dbCues.isNotEmpty()) dbCues else withContext(Dispatchers.IO) { PreviewCueStore.load(app.jobDirectory(job.id)) }
+            var allCues = if (dbCues.isNotEmpty()) dbCues else withContext(Dispatchers.IO) { PreviewCueStore.load(app.jobDirectory(job.id)) }
             val pronunciations = app.jobs.pronunciations(job.id)
             val preservedRanges = app.jobs.preservedRanges(job.id)
             val legacyMissing = job.audioPath != null && allCues.any {
@@ -645,8 +672,20 @@ class MainActivity : ComponentActivity() {
             }
             val searchInput = inputField("Search dialogue, mm:ss, or 'warning'…").apply { setSingleLine() }
             container.addView(searchInput)
-            val pronBtn = button("Pronunciations (${pronunciations.size})") { pronunciationDialog(job) }
-            val songBtn = button("Song ranges (${preservedRanges.size})") { songRangeDialog(job) }
+            lateinit var pronBtn: Button
+            lateinit var songBtn: Button
+            fun refreshCounts() {
+                lifecycleScope.launch {
+                    val pCount = app.jobs.pronunciations(job.id).size
+                    val sCount = app.jobs.preservedRanges(job.id).size
+                    pronBtn.text = "Pronunciations ($pCount)"
+                    pronBtn.contentDescription = pronBtn.text
+                    songBtn.text = "Song ranges ($sCount)"
+                    songBtn.contentDescription = songBtn.text
+                }
+            }
+            pronBtn = button("Pronunciations (${pronunciations.size})") { pronunciationDialog(job, ::refreshCounts) }
+            songBtn = button("Song ranges (${preservedRanges.size})") { songRangeDialog(job, ::refreshCounts) }
             container.addTwoColumnRow(pronBtn, songBtn)
 
             var warningsOnly = false
@@ -654,12 +693,14 @@ class MainActivity : ComponentActivity() {
                 setPadding(0, dp(14), 0, dp(8))
             }
             var displayedCues = emptyList<SavedCue>()
+            val listHeight = (resources.displayMetrics.heightPixels * 0.40f).toInt().coerceIn(dp(130), dp(320))
             val cueRecycler = RecyclerView(this@MainActivity).apply {
                 layoutManager = LinearLayoutManager(this@MainActivity)
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)).apply {
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, listHeight).apply {
                     topMargin = dp(8)
                 }
             }
+            lateinit var populateCues: (String) -> Unit
             val cueAdapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                     val btn = parent.context.button("") {}.apply {
@@ -679,12 +720,20 @@ class MainActivity : ComponentActivity() {
                     (holder.itemView as Button).apply {
                         this.text = text
                         this.contentDescription = text
-                        setOnClickListener { editCueDialog(job, cue) }
+                        setOnClickListener {
+                            editCueDialog(job, cue) {
+                                lifecycleScope.launch {
+                                    val fresh = app.jobs.cues(job.id)
+                                    if (fresh.isNotEmpty()) allCues = fresh
+                                    populateCues(searchInput.text?.toString().orEmpty())
+                                }
+                            }
+                        }
                     }
                 }
             }
             cueRecycler.adapter = cueAdapter
-            fun populateCues(query: String) {
+            populateCues = { query: String ->
                 val searched = Subtitles.searchCues(allCues, query, job.mode, job.subtitleOffsetMs)
                 displayedCues = if (warningsOnly) searched.filter { it.hasTimingWarning(job.subtitleOffsetMs) } else searched
                 emptyLabel.visibility = if (displayedCues.isEmpty()) View.VISIBLE else View.GONE
@@ -709,7 +758,8 @@ class MainActivity : ComponentActivity() {
             })
             container.addView(emptyLabel)
             container.addView(cueRecycler)
-            val builder = AlertDialog.Builder(this@MainActivity).setTitle("Review & correct dialogue (${allCues.size} lines)")
+            val lineWord = if (allCues.size == 1) "line" else "lines"
+            val builder = AlertDialog.Builder(this@MainActivity).setTitle("Review & correct dialogue (${allCues.size} $lineWord)")
                 .setView(container)
                 .setNegativeButton("Close", null)
             if (allCues.isNotEmpty()) {
@@ -721,7 +771,7 @@ class MainActivity : ComponentActivity() {
         } }
     }
 
-    private fun editCueDialog(job: DubJob, cue: SavedCue) {
+    private fun editCueDialog(job: DubJob, cue: SavedCue, onSaved: () -> Unit = {}) {
         val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
         cue.originalTranscript(job.mode)?.let { box.addView(label("Original subtitle: $it", 13f, muted)) }
         val defaultStart = cue.effectiveStartMs(job.subtitleOffsetMs)
@@ -741,7 +791,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id).putExtra("startMs", cue.effectiveStartMs(job.subtitleOffsetMs)))
         })
         AlertDialog.Builder(this).setTitle("Edit line #${cue.index + 1}")
-            .setView(box)
+            .setView(scrollable(box))
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save & rebuild") { _, _ -> lifecycleScope.launch { guarded {
                 checkIdle()
@@ -755,11 +805,12 @@ class MainActivity : ComponentActivity() {
                 val startOverride = if (newStart != baseStart || cue.startOverrideMs != null) newStart else null
                 val endOverride = if (newEnd != baseEnd || cue.endOverrideMs != null) newEnd else null
                 app.jobs.updateCueOverride(job.id, cue.index, newText, startOverride, endOverride, subOnlySwitch.isChecked)
+                onSaved()
                 startTask(PreparationService.REBUILD, job.id)
             } } }.show()
     }
 
-    private fun pronunciationDialog(job: DubJob) {
+    private fun pronunciationDialog(job: DubJob, onChanged: () -> Unit = {}) {
         lifecycleScope.launch { guarded {
             val entries = app.jobs.pronunciations(job.id)
             val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
@@ -768,27 +819,32 @@ class MainActivity : ComponentActivity() {
             val spokenInput = inputField("Spoken phonetics (e.g. Vee-jay)").apply { setSingleLine() }
             box.addView(origInput); box.addView(spokenInput)
             entries.forEach { entry ->
-                box.addView(button("${entry.original} → ${entry.spoken} · Remove", destructive = true) {
+                lateinit var removeBtn: Button
+                removeBtn = button("${entry.original} → ${entry.spoken} · Remove", destructive = true) {
                     lifecycleScope.launch {
                         app.jobs.deletePronunciation(job.id, entry.original)
+                        box.removeView(removeBtn)
+                        onChanged()
                         toast("Removed pronunciation for ${entry.original}. Rebuild dub to apply.")
                     }
-                })
+                }
+                box.addView(removeBtn)
             }
             AlertDialog.Builder(this@MainActivity).setTitle("Pronunciation replacements")
-                .setView(box)
+                .setView(scrollable(box))
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Add") { _, _ -> lifecycleScope.launch { guarded {
                     val from = origInput.text.toString().trim()
                     val to = spokenInput.text.toString().trim()
                     require(from.isNotEmpty() && to.isNotEmpty()) { "Enter both the written spelling and spoken pronunciation." }
                     app.jobs.savePronunciation(PronunciationEntry(job.id, from, to))
+                    onChanged()
                     toast("Saved pronunciation: $from → $to. Rebuild dub to apply.")
                 } } }.show()
         } }
     }
 
-    private fun songRangeDialog(job: DubJob) {
+    private fun songRangeDialog(job: DubJob, onChanged: () -> Unit = {}) {
         lifecycleScope.launch { guarded {
             val ranges = app.jobs.preservedRanges(job.id)
             val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
@@ -797,21 +853,26 @@ class MainActivity : ComponentActivity() {
             val endInput = inputField("End (e.g. 16:00)").apply { setSingleLine() }
             box.addTwoColumnRow(startInput, endInput)
             ranges.forEach { r ->
-                box.addView(button("${Subtitles.formatClock(r.startMs)}–${Subtitles.formatClock(r.endMs)} · Remove", destructive = true) {
+                lateinit var removeBtn: Button
+                removeBtn = button("${Subtitles.formatClock(r.startMs)}–${Subtitles.formatClock(r.endMs)} · Remove", destructive = true) {
                     lifecycleScope.launch {
                         app.jobs.deletePreservedRange(job.id, r.startMs)
+                        box.removeView(removeBtn)
+                        onChanged()
                         toast("Removed song range.")
                     }
-                })
+                }
+                box.addView(removeBtn)
             }
             AlertDialog.Builder(this@MainActivity).setTitle("Manual song / preserved-audio ranges")
-                .setView(box)
+                .setView(scrollable(box))
                 .setNegativeButton("Close", null)
                 .setPositiveButton("Add range") { _, _ -> lifecycleScope.launch { guarded {
                     val s = Subtitles.parseTimestampOrSeconds(startInput.text.toString())
                     val e = Subtitles.parseTimestampOrSeconds(endInput.text.toString())
                     require(e > s) { "Song end time must be after start time." }
                     app.jobs.savePreservedRange(PreservedRange(job.id, s, e))
+                    onChanged()
                     toast("Added preserved song range ${Subtitles.formatClock(s)}–${Subtitles.formatClock(e)}.")
                 } } }.show()
         } }
@@ -845,7 +906,7 @@ class MainActivity : ComponentActivity() {
             } } })
         }
         AlertDialog.Builder(this).setTitle("Preparation queue")
-            .setView(box)
+            .setView(scrollable(box))
             .setNegativeButton("Cancel", null)
             .setNeutralButton("Queue later") { _, _ -> lifecycleScope.launch { guarded {
                 val nextOrder = (app.jobs.queued().maxOfOrNull { it.queueOrder } ?: 0) + 1

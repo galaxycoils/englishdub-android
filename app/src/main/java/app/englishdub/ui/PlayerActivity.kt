@@ -87,11 +87,12 @@ class PlayerActivity : ComponentActivity() {
         }
         val prefs = getSharedPreferences("playback", MODE_PRIVATE)
         backgroundVolume = prefs.getFloat("backgroundVolume", 0.15f)
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val layout = column().apply { setBackgroundColor(canvasColor) }
 
         val topBar = row().apply {
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(8), dp(18), dp(8))
+            setPadding(dp(14), dp(if (isLandscape) 4 else 8), dp(18), dp(if (isLandscape) 4 else 8))
         }
         val backBtn = button("← Back") { finish() }.apply {
             contentDescription = "Navigate back"
@@ -113,11 +114,10 @@ class PlayerActivity : ComponentActivity() {
             setBackgroundColor(android.graphics.Color.BLACK)
             setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
         }
-        layout.addView(playerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
         val controls = column().apply {
             setBackgroundColor(canvasColor)
-            setPadding(dp(16), dp(10), dp(16), dp(12))
+            setPadding(dp(16), dp(if (isLandscape) 6 else 10), dp(16), dp(12))
         }
         caption = label("", captionSizeSp, ink).apply {
             contentDescription = "English captions"
@@ -210,9 +210,20 @@ class PlayerActivity : ComponentActivity() {
             speedButton.contentDescription = speedButton.text
         }
         actionRow.addView(speedButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.85f))
+        equalizeRowHeights(actionRow)
         controls.addView(actionRow)
 
-        layout.addView(controls)
+        if (isLandscape) {
+            val split = row().apply {
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            }
+            split.addView(playerView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.35f))
+            split.addView(scrollable(controls), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            layout.addView(split)
+        } else {
+            layout.addView(playerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            layout.addView(controls)
+        }
         setContentView(layout)
         ViewCompat.setOnApplyWindowInsetsListener(layout) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()); view.setPadding(bars.left, bars.top, bars.right, bars.bottom); insets
@@ -267,7 +278,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun applyCaptionStyle() {
         caption.textSize = captionSizeSp
-        caption.visibility = if (captionsEnabled) View.VISIBLE else View.INVISIBLE
+        caption.visibility = if (captionsEnabled) View.VISIBLE else View.GONE
         if (::captionControlButton.isInitialized) {
             captionControlButton.text = captionButtonText()
             captionControlButton.contentDescription =

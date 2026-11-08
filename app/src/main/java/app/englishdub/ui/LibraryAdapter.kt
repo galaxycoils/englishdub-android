@@ -84,6 +84,7 @@ class LibraryAdapter(
             ).apply { topMargin = context.dp(8) }
             prepRow.addView(previewBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = context.dp(4) })
             prepRow.addView(queueBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = context.dp(4) })
+            equalizeRowHeights(prepRow)
             card.addView(prepRow)
 
             val reviewBtn = makeBtn("review")
@@ -94,6 +95,7 @@ class LibraryAdapter(
             ).apply { topMargin = context.dp(8) }
             editRow.addView(reviewBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = context.dp(4) })
             editRow.addView(subtitlesBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = context.dp(4) })
+            equalizeRowHeights(editRow)
             card.addView(editRow)
 
             val exportBtn = makeBtn("export")
@@ -104,6 +106,7 @@ class LibraryAdapter(
             ).apply { topMargin = context.dp(8) }
             footerRow.addView(exportBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = context.dp(4) })
             footerRow.addView(removeBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            equalizeRowHeights(footerRow)
             card.addView(footerRow)
 
             card.layoutParams = RecyclerView.LayoutParams(
