@@ -251,4 +251,26 @@ class OfflinePipelineTest {
             }
         } finally { wave.delete(); pcm.delete() }
     }
+    @Test fun hardwareProfileDetectsDeviceAndAppliesOptimalSetup() {
+        val profile = HardwareProfile.detect(context)
+        assertTrue(profile.totalRamBytes > 0L)
+        assertTrue(profile.availableCores >= 1)
+        assertTrue(profile.freeStorageBytes > 0L)
+        assertTrue(profile.summaryLine.startsWith("Detected: "))
+        assertTrue(profile.summaryLine.contains("RAM"))
+        assertTrue(profile.recommendedThreads in 1..4)
+        val prefs = context.getSharedPreferences("preparation-test-hw", Context.MODE_PRIVATE)
+        try {
+            prefs.edit().clear().commit()
+            HardwareProfile.applyOptimalSettings(prefs, profile, vadVerified = true, selectedVoiceName = "en-us-test")
+            assertTrue(prefs.getBoolean("autoSetupCompleted", false))
+            assertEquals(profile.tier.name, prefs.getString("autoSetupTier", null))
+            assertEquals(profile.recommendedThreads, HardwareProfile.resolveInferenceThreads(context, prefs))
+            assertEquals(profile.recommendedSpeechCacheBytes, HardwareProfile.resolveSpeechCacheBytes(context, prefs))
+            assertTrue(prefs.getBoolean("vad", false))
+            assertEquals("en-us-test", prefs.getString("voiceName", null))
+        } finally {
+            prefs.edit().clear().commit()
+        }
+    }
 }

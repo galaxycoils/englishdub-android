@@ -11,6 +11,7 @@
 - Add a persistent, reorderable preparation queue with charging-only default, power-disconnect pause handling, active-session continuation, and granular storage accounting/cleanup for previews, reusable speech clips, completed dubs, and app-owned downloads.
 - Add UTF-8 SRT and English voice-track M4A exports through Android's document picker with recoverable cancellation and write-failure handling.
 - Migrate Room schema 2→3 (`MIGRATION_2_3`), split stage cache signatures (`recognition`, `translation`, `speech`, `timeline`), and store reusable compressed speech clips (`.pcm.gz`) with incremental decoding and 256 MiB LRU eviction protecting active-job assets.
+- Add smart hardware auto-detection and setup (`HardwareProfile`): inspect RAM, CPU cores, storage headroom, and hardware AAC codecs to classify phone tier (Budget, Balanced, High Performance), tune inference threads and speech cache limits, and auto-download verified offline packs with one tap.
 - Add the documented 36-clip Hindi/Urdu/Tamil evaluation set (`docs/evaluation/EVALUATION-SET-0.3.md`); keep language quality labeled experimental pending human bilingual review.
 
 ## 0.2.1 preview

@@ -12,11 +12,11 @@
       "arm64-v8a"
     ],
     "bytes": 20314534,
-    "sha256": "0b91ea5fa839e00a4763b332eae39015447f0c7b0eb5f565e6108b767174b052",
+    "sha256": "7d6860373565673e4e6ee2cac8adfa00352be5fd0c14255cd013070510e8b720",
     "release_unsigned_bytes": 20306326,
-    "release_unsigned_sha256": "07efc8b2e7570f9d77b610d26b08387902b75348c886c768628d2e8a91ccdca9",
+    "release_unsigned_sha256": "fa18ecdcb61e61229780ff7197ca8df6a8012d509266dae40701e26a33d2f036",
     "debug_bytes": 26874616,
-    "debug_sha256": "ecbd41b60d9b04b6cd22a93015600da7fffd20d45974cfc312754ca81536c002",
+    "debug_sha256": "0b8d5b839c9e8645090038deab157c70b52b58b25cdf83f3367f01367735d885",
     "signature_v2": true,
     "zip_alignment_16kb": true,
     "all_native_load_alignment_16kb": true,
@@ -26,7 +26,7 @@
     "ui_smoke": "installed and library rendered on same API35 ARM64 emulator; separate preview package"
   },
   "jvm": {
-    "tests": 44,
+    "tests": 50,
     "failures": 0,
     "errors": 0
   },

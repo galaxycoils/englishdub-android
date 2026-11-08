@@ -1,16 +1,16 @@
 # Validation — 0.3.0 experimental preview
 
-The 0.3.0 release delivers track inspection & source recommendations, 60-second scene previews, searchable dialogue review/editing with spoken-only pronunciation overrides and preserved song ranges, a persistent reorderable queue with charging-only policy and storage cleanup, SRT/M4A exports, Room 2→3 migration, and reusable GZIP-compressed speech clips (`.pcm.gz`). It passes 44 JVM unit regressions and 15 Android instrumentation tests on the accelerated ARM64 Android 15 emulator. Language quality remains labeled **experimental** pending human bilingual review.
+The 0.3.0 release delivers track inspection & source recommendations, 60-second scene previews, searchable dialogue review/editing with spoken-only pronunciation overrides and preserved song ranges, a persistent reorderable queue with charging-only policy and storage cleanup, SRT/M4A exports, Room 2→3 migration, reusable GZIP-compressed speech clips (`.pcm.gz`), and smart hardware auto-detection (`HardwareProfile`). It passes 50 JVM unit regressions and 16 Android instrumentation tests on the accelerated ARM64 Android 15 emulator. Language quality remains labeled **experimental** pending human bilingual review.
 
 | Check | Current result |
 | --- | --- |
-| JVM regressions (including SQLite v1→v2→v3 migration & 36-clip evaluation check) | 44 passed; zero failures/errors |
+| JVM regressions (including SQLite v1→v2→v3 migration & 36-clip evaluation check) | 50 passed; zero failures/errors |
 | Android lint | 0 errors, 56 warnings |
-| Android offline core, 0.3 preview/rebuild, and full native inference | 11 passed; zero failures/skips (9.082 s) |
+| Android offline core, 0.3 preview/rebuild, hardware auto-setup, and full native inference | 12 passed; zero failures/skips (10.024 s) |
 | Strict sync and playback recovery | 4 passed; zero failures/skips (15.452 s) |
 | Maximum sampled stable drift | 53 ms; limit remains 150 ms |
-| Preview packaging (`app-preview.apk`, versionCode 4) | ARM64, 20,314,534 bytes, SHA-256 `0b91ea5fa839e00a4763b332eae39015447f0c7b0eb5f565e6108b767174b052` |
-| Unsigned release packaging (`app-release-unsigned.apk`, versionCode 4) | ARM64, 20,306,326 bytes, SHA-256 `07efc8b2e7570f9d77b610d26b08387902b75348c886c768628d2e8a91ccdca9` |
+| Preview packaging (`app-preview.apk`, versionCode 4) | ARM64, 20,314,534 bytes, SHA-256 `7d6860373565673e4e6ee2cac8adfa00352be5fd0c14255cd013070510e8b720` |
+| Unsigned release packaging (`app-release-unsigned.apk`, versionCode 4) | ARM64, 20,306,326 bytes, SHA-256 `fa18ecdcb61e61229780ff7197ca8df6a8012d509266dae40701e26a33d2f036` |
 | 36-clip Hindi/Urdu/Tamil evaluation set (`docs/evaluation/EVALUATION-SET-0.3.md`) | 36 redistributable clips (12 `hi`, 12 `ur`, 12 `ta` across 6 conditions) compared against 0.2.1; labeled experimental pending human bilingual review |
 | Physical-phone efficiency and synchronization | Unverified |
 | Hindi/Urdu/Tamil human bilingual sign-off | Pending (`bilingualReviewed: false` in `docs/evaluation/evaluation-manifest-0.3.json`) |

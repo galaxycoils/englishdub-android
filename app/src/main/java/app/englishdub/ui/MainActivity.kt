@@ -46,9 +46,15 @@ class MainActivity : ComponentActivity() {
     private var packWarning = ""
     private var lastBusy = false
     private var storage = StorageBreakdown()
+    private lateinit var hardwareProfile: DeviceHardwareProfile
     private lateinit var library: RecyclerView
     private lateinit var libraryAdapter: LibraryAdapter
     private lateinit var libraryActions: LinearLayout
+    private lateinit var smartSetupCard: LinearLayout
+    private lateinit var smartSetupEyebrow: TextView
+    private lateinit var smartSetupHardwareLabel: TextView
+    private lateinit var smartSetupPlanLabel: TextView
+    private lateinit var smartSetupButton: Button
     private lateinit var libraryTabButton: Button
     private lateinit var offlineTabButton: Button
     private lateinit var statusCard: LinearLayout
@@ -121,6 +127,7 @@ class MainActivity : ComponentActivity() {
         subtitleFor = savedInstanceState?.getString("subtitleFor")
         exportJobId = savedInstanceState?.getString("exportJobId")
         offline = savedInstanceState?.getBoolean("offline") ?: false
+        hardwareProfile = HardwareProfile.detect(this)
         root = column().apply { setPadding(0, 0, 0, dp(20)) }
         scroll = ScrollView(this).apply { isFillViewport = true; addView(root); visibility = View.GONE }
         libraryAdapter = LibraryAdapter(::libraryAction)
@@ -226,6 +233,26 @@ class MainActivity : ComponentActivity() {
         }
         shell.addView(libraryActions)
 
+        smartSetupEyebrow = eyebrow("SMART HARDWARE SETUP")
+        smartSetupHardwareLabel = label(hardwareProfile.summaryLine, 14f, ink, true)
+        smartSetupPlanLabel = label("", 13f, muted)
+        smartSetupButton = button("Auto-detect & setup for this device", primary = true) { startAutoSetup() }.apply {
+            contentDescription = "Auto-detect hardware and download recommended offline packs"
+        }
+        smartSetupCard = card().apply {
+            setPadding(dp(14), dp(10), dp(14), dp(12))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(2); bottomMargin = dp(4) }
+            addView(smartSetupEyebrow)
+            addView(smartSetupHardwareLabel)
+            addView(smartSetupPlanLabel)
+            addView(smartSetupButton)
+            visibility = View.GONE
+        }
+        shell.addView(smartSetupCard)
+
         val body = FrameLayout(this).apply { addView(library); addView(scroll) }
         shell.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(shell)
@@ -241,12 +268,13 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             app.recovery.await()
+            launch { refreshPacks(); render() }
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(app.jobs.observe(), PreparationService.status) { items, status -> items to status }.collect { (items, status) ->
                     jobs = items
                     updateStatus(status)
                     updateLibrary()
-                    if (lastBusy && !status.busy && offline) { refreshPacks(); render() }
+                    if (lastBusy && !status.busy) { refreshPacks(); render() }
                     lastBusy = status.busy
                 }
             }
@@ -268,10 +296,34 @@ class MainActivity : ComponentActivity() {
         library.visibility = if (offline) View.GONE else View.VISIBLE
         libraryActions.visibility = if (offline) View.GONE else View.VISIBLE
         updateStatus(PreparationService.status.value)
+        updateSmartSetupBanner()
         if (offline) {
             val y = scroll.scrollY
             root.removeAllViews(); renderOffline(); scroll.post { scroll.scrollTo(0, y) }
         } else updateLibrary()
+    }
+
+    private fun updateSmartSetupBanner() {
+        val status = PreparationService.status.value
+        val plan = HardwareProfile.buildSetupPlan(
+            profile = hardwareProfile,
+            speechReady = app.models.ready,
+            vadReady = app.models.vadReady,
+            installedTranslations = installed,
+            jobs = jobs,
+        )
+        val hasMissingPackJob = jobs.any { it.state == "missing_pack" }
+        val showBanner = !offline && !status.busy && (!plan.allInstalled || hasMissingPackJob)
+        if (!showBanner) {
+            smartSetupCard.visibility = View.GONE
+            return
+        }
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        smartSetupEyebrow.text = "SMART HARDWARE SETUP · ${hardwareProfile.tier.label.uppercase(java.util.Locale.US)}"
+        smartSetupHardwareLabel.text = hardwareProfile.summaryLine
+        smartSetupPlanLabel.text = plan.summaryText
+        smartSetupPlanLabel.visibility = if (isLandscape) View.GONE else View.VISIBLE
+        smartSetupCard.visibility = View.VISIBLE
     }
 
     private fun updateStatus(status: PreparationStatus) {
@@ -288,6 +340,7 @@ class MainActivity : ComponentActivity() {
         val busy = PreparationService.status.value.busy
         val rows = if (jobs.isEmpty()) listOf(LibraryRow(null, busy)) else jobs.map { LibraryRow(it, busy) }
         libraryAdapter.submitList(rows)
+        updateSmartSetupBanner()
     }
 
     private fun libraryAction(action: String, job: DubJob) {
@@ -295,6 +348,7 @@ class MainActivity : ComponentActivity() {
         when (action) {
             "watch" -> startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id))
             "watch_preview" -> startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id).putExtra("preview", true))
+            "auto_setup" -> startAutoSetup()
             "resume" -> startTask(
                 PreparationService.PREPARE,
                 job.id,
@@ -317,6 +371,28 @@ class MainActivity : ComponentActivity() {
 
     private fun renderOffline() {
         if (packWarning.isNotBlank()) root.addView(label(packWarning, 13f, amber))
+        val settings = getSharedPreferences("preparation", MODE_PRIVATE)
+        val plan = HardwareProfile.buildSetupPlan(
+            profile = hardwareProfile,
+            speechReady = app.models.ready,
+            vadReady = app.models.vadReady,
+            installedTranslations = installed,
+            jobs = jobs,
+        )
+        val autoSetupDone = settings.getBoolean("autoSetupCompleted", false) && plan.allInstalled
+        root.addView(card().apply {
+            addView(eyebrow("SMART HARDWARE SETUP · ${hardwareProfile.tier.label.uppercase(java.util.Locale.US)}"))
+            addView(label(if (autoSetupDone) "Optimized for this device" else "Auto-detect & setup for this device", 20f, ink, true))
+            addView(label(hardwareProfile.summaryLine, 14f, mint, true))
+            addView(label(hardwareProfile.tuningSummaryLine, 13f, ink))
+            addView(label("${plan.summaryText}\n${plan.detailText}", 13f, muted))
+            addView(button(
+                if (autoSetupDone) "✓ Optimized for this device · Re-run setup" else "Auto-detect & setup for this device",
+                primary = !autoSetupDone,
+            ) { startAutoSetup() }.apply {
+                contentDescription = "Auto-detect hardware and download recommended offline packs"
+            })
+        })
         root.addView(card().apply {
             addView(eyebrow("REQUIRED · OFFLINE SPEECH"))
             addView(label("English voice", 20f, ink, true))
@@ -410,10 +486,11 @@ class MainActivity : ComponentActivity() {
             addView(eyebrow("STORAGE & CACHE"))
             addView(label("Keep storage light", 20f, ink, true))
             val mb = { b: Long -> "%.1f MB".format(java.util.Locale.US, b / (1024.0 * 1024.0)) }
+            val cacheLimitMb = HardwareProfile.resolveSpeechCacheBytes(this@MainActivity, settings) / (1024 * 1024)
             addView(label(
                 "Total app storage: ${mb(storage.totalBytes)}\n" +
                     "• Scene previews: ${mb(storage.previewsBytes)}\n" +
-                    "• Reusable speech clips (≤256 MiB LRU): ${mb(storage.speechCacheBytes)}\n" +
+                    "• Reusable speech clips (≤$cacheLimitMb MiB LRU): ${mb(storage.speechCacheBytes)}\n" +
                     "• Completed English dubs: ${mb(storage.completedDubsBytes)}\n" +
                     "• App-owned downloads & packs: ${mb(storage.downloadsBytes)}\n" +
                     "Your original local video files are never modified or deleted.",
@@ -960,12 +1037,46 @@ class MainActivity : ComponentActivity() {
     private fun fileName(uri: Uri): String = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Local video"
 
     private suspend fun refreshPacks() {
+        hardwareProfile = withContext(Dispatchers.IO) { HardwareProfile.detect(this@MainActivity) }
         try { installed = withContext(Dispatchers.IO) { withTimeout(5000) { OfflineTranslation.installed() } }; packWarning = "" }
         catch (_: TimeoutCancellationException) { installed = emptySet(); packWarning = "Translation pack status is unavailable. Voice and speech setup remain available." }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { installed = emptySet(); packWarning = "Translation pack status is unavailable. Voice and speech setup remain available." }
         voices = withContext(Dispatchers.IO) { runCatching { OfflineVoice.availableVoices(this@MainActivity) }.getOrDefault(voices) }
         storage = withContext(Dispatchers.IO) { ResourcePolicy.computeStorage(app.filesDir) }
+    }
+
+    private fun startAutoSetup() {
+        if (!checkIdleUi()) return
+        hardwareProfile = HardwareProfile.detect(this)
+        val plan = HardwareProfile.buildSetupPlan(
+            profile = hardwareProfile,
+            speechReady = app.models.ready,
+            vadReady = app.models.vadReady,
+            installedTranslations = installed,
+            jobs = jobs,
+        )
+        val batteryManager = getSystemService(android.os.BatteryManager::class.java)
+        val batteryPct = batteryManager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 1..100 } ?: 100
+        val isCharging = batteryManager?.isCharging == true || run {
+            val status = registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+                ?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+            status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL
+        }
+        val thermalSevere = Build.VERSION.SDK_INT >= 29 &&
+            getSystemService(android.os.PowerManager::class.java)?.currentThermalStatus?.let { it >= android.os.PowerManager.THERMAL_STATUS_SEVERE } == true
+        val admission = HardwareProfile.checkAdmission(
+            freeStorageBytes = hardwareProfile.freeStorageBytes,
+            requiredDownloadBytes = plan.requiredDownloadBytes,
+            batteryPercent = batteryPct,
+            isCharging = isCharging,
+            thermalSevere = thermalSevere,
+        )
+        if (!admission.allowed) {
+            toast(admission.reason ?: "Could not start auto-setup.")
+            return
+        }
+        startTask(PreparationService.AUTO_SETUP, "auto-setup")
     }
 
     private fun checkIdle() { check(!PreparationService.status.value.busy) { "Pause the current task first." } }

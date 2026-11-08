@@ -84,6 +84,7 @@ class PreparationService : Service() {
                 lock.acquire(6 * 60 * 60 * 1000L)
                 withTimeout(5 * 60 * 60 * 1000L + 55 * 60 * 1000L) {
                     when (mode) {
+                        AUTO_SETUP -> result = autoSetup(currentId)
                         SPEECH_PACK -> app.models.download { publish(currentId, "Downloading speech pack", it) }
                         VAD_PACK -> app.models.downloadVad { publish(currentId, "Downloading speech detector", it) }
                         TRANSLATION_PACK -> { publish(currentId, "Downloading ${OfflineTranslation.languages[currentId]} over Wi-Fi", 0); OfflineTranslation.download(currentId) }
@@ -168,6 +169,77 @@ class PreparationService : Service() {
         }
     }
 
+    private suspend fun autoSetup(id: String): String {
+        publish(id, "Inspecting phone hardware…", 5)
+        val profile = HardwareProfile.detect(this)
+        val allJobs = app.jobs.all()
+        val installedTrans = runCatching { OfflineTranslation.installed() }.getOrDefault(emptySet())
+        val plan = HardwareProfile.buildSetupPlan(
+            profile = profile,
+            speechReady = app.models.ready,
+            vadReady = app.models.vadReady,
+            installedTranslations = installedTrans,
+            jobs = allJobs,
+        )
+        val thermalSevere = Build.VERSION.SDK_INT >= 29 &&
+            getSystemService(PowerManager::class.java).currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE
+        val admission = HardwareProfile.checkAdmission(
+            freeStorageBytes = profile.freeStorageBytes,
+            requiredDownloadBytes = plan.requiredDownloadBytes,
+            batteryPercent = readBatteryPercent(),
+            isCharging = isDeviceCharging(),
+            thermalSevere = thermalSevere,
+        )
+        require(admission.allowed) { admission.reason ?: "Could not start auto-setup." }
+
+        val prefs = getSharedPreferences("preparation", MODE_PRIVATE)
+        val bestVoice = runCatching { OfflineVoice.availableVoices(this).firstOrNull()?.name }.getOrNull()
+        publish(id, "Tuning ${profile.tier.label} settings (${profile.recommendedThreads} threads)…", 10)
+
+        if (plan.downloadVadPack && !app.models.vadReady) {
+            checkEnvironment()
+            app.models.downloadVad { pct ->
+                publish(id, "Downloading speech detector · $pct%", 10 + pct * 15 / 100)
+            }
+        }
+        if (plan.downloadSpeechPack && !app.models.ready) {
+            checkEnvironment()
+            app.models.download { pct ->
+                publish(id, "Downloading speech pack (57 MB) · $pct%", 25 + pct * 60 / 100)
+            }
+        }
+        for ((index, code) in plan.translationPacksToDownload.withIndex()) {
+            checkEnvironment()
+            val langName = OfflineTranslation.languages[code] ?: code
+            val baseProgress = 85 + (index * 10 / plan.translationPacksToDownload.size.coerceAtLeast(1))
+            publish(id, "Downloading $langName translation pack…", baseProgress)
+            runCatching { withTimeout(25_000) { OfflineTranslation.download(code) } }
+        }
+
+        HardwareProfile.applyOptimalSettings(
+            prefs = prefs,
+            profile = profile,
+            vadVerified = app.models.vadReady,
+            selectedVoiceName = bestVoice,
+        )
+
+        val updatedTrans = runCatching { OfflineTranslation.installed() }.getOrDefault(installedTrans)
+        app.jobs.all().filter { it.state == "missing_pack" }.forEach { job ->
+            val packReady = when {
+                job.mode == "speech" -> app.models.ready
+                job.sourceLanguage == "en" -> true
+                else -> job.sourceLanguage in updatedTrans
+            }
+            if (packReady) {
+                app.jobs.state(job.id, "new", "Offline packs ready (${profile.tier.label}). Tap Prepare to dub.")
+            }
+        }
+
+        val threadWord = if (profile.recommendedThreads == 1) "thread" else "threads"
+        publish(id, "Auto-setup complete · ${profile.tier.label}", 100)
+        return "Auto-setup complete (${profile.tier.label} · ${profile.recommendedThreads} $threadWord). Ready to watch and dub."
+    }
+
     private suspend fun downloadVideo(id: String) {
         val job = app.jobs.get(id) ?: error("Video was removed.")
         app.jobs.state(id, "downloading", "Downloading video")
@@ -192,11 +264,12 @@ class PreparationService : Service() {
         else if (job.sourceLanguage != "en") require(job.sourceLanguage in OfflineTranslation.installed()) { "Download the ${OfflineTranslation.languages[job.sourceLanguage]} translation pack in Offline setup first." }
         val directory = app.jobDirectory(id)
         require(directory.usableSpace > 24 * 1024 * 1024) { "Free at least 24 MB of storage and retry." }
+        val prefs = getSharedPreferences("preparation", MODE_PRIVATE)
         val startedAt = SystemClock.elapsedRealtime()
         val rawCues: List<SavedCue> = if (job.mode == "speech") {
-            val useVad = app.models.vadReady && getSharedPreferences("preparation", MODE_PRIVATE).getBoolean("vad", false)
-            val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
-            val engine = WhisperBridge(app.models.speechFile.path, ResourcePolicy.inferenceThreads(memory.totalMem), if (useVad) app.models.vadFile.path else null)
+            val useVad = app.models.vadReady && prefs.getBoolean("vad", false)
+            val threads = HardwareProfile.resolveInferenceThreads(this, prefs)
+            val engine = WhisperBridge(app.models.speechFile.path, threads, if (useVad) app.models.vadFile.path else null)
             whisper = engine
             val recognizedCues = mutableListOf<SavedCue>()
             try {
@@ -229,7 +302,7 @@ class PreparationService : Service() {
         val shiftedForPreview: List<SavedCue>
         try {
             OfflineVoice.create(this, job.voiceName).use { voice ->
-                val cache = CueAudioCache.reusable(app.speechCacheDir, voice.identity)
+                val cache = CueAudioCache.reusable(app.speechCacheDir, voice.identity, HardwareProfile.resolveSpeechCacheBytes(this, prefs))
                 val pass = DialoguePipeline.synthesizeAndPlaceCues(
                     cues = rawCues,
                     subtitleOffsetMs = job.subtitleOffsetMs,
@@ -283,7 +356,8 @@ class PreparationService : Service() {
         require(directory.usableSpace > 32 * 1024 * 1024) { "Free at least 32 MB of storage and retry." }
         val subtitleText = job.subtitleUri?.takeIf { job.mode != "speech" }?.let { readSubtitles(Uri.parse(it)) }
         val source = PreparationIdentity.source(this, media) ?: java.util.UUID.randomUUID().toString()
-        val useVad = job.mode == "speech" && app.models.vadReady && getSharedPreferences("preparation", MODE_PRIVATE).getBoolean("vad", false)
+        val prefs = getSharedPreferences("preparation", MODE_PRIVATE)
+        val useVad = job.mode == "speech" && app.models.vadReady && prefs.getBoolean("vad", false)
         val recSig = if (job.mode == "speech") {
             PreparationIdentity.recognition(source, job.audioTrackIndex, job.sourceLanguage, ModelStore.SHA256, if (useVad) ModelStore.VAD_SHA256 else "no-vad")
         } else {
@@ -348,8 +422,8 @@ class PreparationService : Service() {
         val startedAt = SystemClock.elapsedRealtime()
         var cues = app.jobs.cues(id)
         if (!rebuildOnly && job.mode == "speech" && job.decodedUntilMs < duration - 100) {
-            val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
-            val engine = WhisperBridge(app.models.speechFile.path, ResourcePolicy.inferenceThreads(memory.totalMem), if (useVad) app.models.vadFile.path else null)
+            val threads = HardwareProfile.resolveInferenceThreads(this, prefs)
+            val engine = WhisperBridge(app.models.speechFile.path, threads, if (useVad) app.models.vadFile.path else null)
             whisper = engine
             try {
                 AudioTools.decodeChunks(this, media, job.decodedUntilMs, Long.MAX_VALUE, job.audioTrackIndex) { start, buffer, count, rms ->
@@ -396,7 +470,7 @@ class PreparationService : Service() {
                         cues = cues.map { it.copy(pcmPath = null, rate = 0, spokenStartMs = 0, spokenEndMs = 0) }
                     }
                 }
-                val cache = CueAudioCache.reusable(app.speechCacheDir, voice.identity)
+                val cache = CueAudioCache.reusable(app.speechCacheDir, voice.identity, HardwareProfile.resolveSpeechCacheBytes(this, prefs))
                 val pass = DialoguePipeline.synthesizeAndPlaceCues(
                     cues = cues,
                     subtitleOffsetMs = job.subtitleOffsetMs,
@@ -469,6 +543,16 @@ class PreparationService : Service() {
         }
     }
 
+    private fun readBatteryPercent(): Int {
+        val battery = getSystemService(BatteryManager::class.java)
+        val capacity = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        if (capacity in 1..100) return capacity
+        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return 100
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        return if (level >= 0 && scale > 0) (level * 100 / scale).coerceIn(0, 100) else 100
+    }
+
     private fun isDeviceCharging(): Boolean {
         val battery = getSystemService(BatteryManager::class.java)
         if (battery != null && battery.isCharging) return true
@@ -520,6 +604,7 @@ class PreparationService : Service() {
         const val PREVIEW = "preview"
         const val REBUILD = "rebuild"
         const val DOWNLOAD = "download"
+        const val AUTO_SETUP = "auto-setup"
         const val SPEECH_PACK = "speech-pack"
         const val VAD_PACK = "vad-pack"
         const val TRANSLATION_PACK = "translation-pack"

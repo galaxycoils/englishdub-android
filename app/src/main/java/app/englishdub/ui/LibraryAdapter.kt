@@ -69,6 +69,7 @@ class LibraryAdapter(
             // Primary playback / recovery actions
             card.addView(makeBtn("watch", primary = true))
             card.addView(makeBtn("watch_preview"))
+            card.addView(makeBtn("auto_setup", primary = true))
             card.addView(makeBtn("resume", primary = true))
             card.addView(makeBtn("download", primary = true))
 
@@ -158,8 +159,13 @@ class LibraryAdapter(
                 text = "Watch 60s scene preview"
                 contentDescription = "Watch 60s scene preview (compare original and English)"
             }
+            buttons["auto_setup"]!!.apply {
+                visibility = if (local && editable && job.state == "missing_pack") View.VISIBLE else View.GONE
+                text = "Auto-detect & setup for this device"
+                contentDescription = text
+            }
             buttons["resume"]!!.apply {
-                visibility = if (local && editable && resumable) View.VISIBLE else View.GONE
+                visibility = if (local && editable && resumable && job.state != "missing_pack") View.VISIBLE else View.GONE
                 text = if (job.state == "queued") "Start queued preparation" else "Resume preparation"
                 contentDescription = text
             }
