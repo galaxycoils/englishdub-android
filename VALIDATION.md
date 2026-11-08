@@ -9,8 +9,8 @@ The 0.3.0 release delivers track inspection & source recommendations, 60-second 
 | Android offline core, 0.3 preview/rebuild, and full native inference | 11 passed; zero failures/skips (9.082 s) |
 | Strict sync and playback recovery | 4 passed; zero failures/skips (15.452 s) |
 | Maximum sampled stable drift | 53 ms; limit remains 150 ms |
-| Preview packaging (`app-preview.apk`, versionCode 4) | ARM64, 20,298,150 bytes, SHA-256 `b5ea434efe6711a4d679a16e98f1b7d55826f379f50a2a25d40dd2a10ad66af2` |
-| Unsigned release packaging (`app-release-unsigned.apk`, versionCode 4) | ARM64, 20,289,942 bytes, SHA-256 `6ddcfce11730a54c027b990c393400da1b27f4eef881962d7ebdd6dbd41d8225` |
+| Preview packaging (`app-preview.apk`, versionCode 4) | ARM64, 20,314,534 bytes, SHA-256 `0b91ea5fa839e00a4763b332eae39015447f0c7b0eb5f565e6108b767174b052` |
+| Unsigned release packaging (`app-release-unsigned.apk`, versionCode 4) | ARM64, 20,306,326 bytes, SHA-256 `07efc8b2e7570f9d77b610d26b08387902b75348c886c768628d2e8a91ccdca9` |
 | 36-clip Hindi/Urdu/Tamil evaluation set (`docs/evaluation/EVALUATION-SET-0.3.md`) | 36 redistributable clips (12 `hi`, 12 `ur`, 12 `ta` across 6 conditions) compared against 0.2.1; labeled experimental pending human bilingual review |
 | Physical-phone efficiency and synchronization | Unverified |
 | Hindi/Urdu/Tamil human bilingual sign-off | Pending (`bilingualReviewed: false` in `docs/evaluation/evaluation-manifest-0.3.json`) |
