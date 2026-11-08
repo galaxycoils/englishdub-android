@@ -49,6 +49,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var library: RecyclerView
     private lateinit var libraryAdapter: LibraryAdapter
     private lateinit var libraryActions: LinearLayout
+    private lateinit var libraryTabButton: Button
+    private lateinit var offlineTabButton: Button
+    private lateinit var statusCard: LinearLayout
     private lateinit var statusLabel: TextView
     private lateinit var statusProgress: ProgressBar
     private lateinit var pauseButton: Button
@@ -121,31 +124,93 @@ class MainActivity : ComponentActivity() {
         root = column().apply { setPadding(0, 0, 0, dp(20)) }
         scroll = ScrollView(this).apply { isFillViewport = true; addView(root); visibility = View.GONE }
         libraryAdapter = LibraryAdapter(::libraryAction)
-        library = RecyclerView(this).apply { layoutManager = LinearLayoutManager(this@MainActivity); adapter = libraryAdapter; itemAnimator = null }
-        val shell = column().apply { setBackgroundColor(canvasColor); setPadding(dp(22), dp(12), dp(22), dp(10)) }
-        shell.addView(label("ENGLISH, FIRST · 0.3 EXPERIMENTAL", 12f, mint, true)); shell.addView(label("EnglishDub", 30f, ink, true))
-        val tabs = row()
-        tabs.addView(button("Library") { offline = false; render() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(8) })
-        tabs.addView(button("Offline setup") {
+        library = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = libraryAdapter
+            itemAnimator = null
+            clipToPadding = false
+            setPadding(0, dp(4), 0, dp(16))
+        }
+        val shell = column().apply {
+            setBackgroundColor(canvasColor)
+            setPadding(dp(20), dp(10), dp(20), dp(8))
+        }
+        shell.addView(eyebrow("OFFLINE FILM DUBBING · v0.3"))
+        shell.addView(label("EnglishDub", 28f, ink, true))
+
+        val tabs = row().apply {
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(cardColor)
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), borderSubtle)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(6)
+            }
+        }
+        libraryTabButton = button("Library") { offline = false; render() }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(2) }
+        }
+        offlineTabButton = button("Offline setup") {
             offline = true; render()
             lifecycleScope.launch { refreshPacks(); if (offline) render() }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(2) }
+        }
+        tabs.addView(libraryTabButton)
+        tabs.addView(offlineTabButton)
         shell.addView(tabs)
-        statusLabel = label("", 14f, mint)
-        statusProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
+
+        statusLabel = label("", 14f, mint, true)
+        statusProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            progressTintList = android.content.res.ColorStateList.valueOf(mint)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(surfaceSubtle)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(4); bottomMargin = dp(4) }
+        }
         pauseButton = button("Pause task") { PreparationService.pause(this) }
-        shell.addView(statusLabel); shell.addView(statusProgress); shell.addView(pauseButton)
+        statusCard = card().apply {
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(4); bottomMargin = dp(4) }
+            addView(statusLabel)
+            addView(statusProgress)
+            addView(pauseButton)
+            visibility = View.GONE
+        }
+        shell.addView(statusCard)
+
         libraryActions = column().apply {
-            addView(button("＋  Open a video", true) { videoPicker.launch(arrayOf("video/*")) })
-            addView(button("Download a direct video link") { linkDialog() })
+            val openBtn = button("＋ Open video", primary = true) { videoPicker.launch(arrayOf("video/*")) }.apply {
+                contentDescription = "Open a video"
+            }
+            val linkBtn = button("Download URL") { linkDialog() }.apply {
+                contentDescription = "Download a direct video link"
+            }
+            addTwoColumnRow(openBtn, linkBtn)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(4) }
         }
         shell.addView(libraryActions)
+
         val body = FrameLayout(this).apply { addView(library); addView(scroll) }
         shell.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(shell)
         ViewCompat.setOnApplyWindowInsetsListener(shell) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(dp(22) + bars.left, dp(12) + bars.top, dp(22) + bars.right, dp(10) + bars.bottom); insets
+            view.setPadding(dp(20) + bars.left, dp(10) + bars.top, dp(20) + bars.right, dp(8) + bars.bottom)
+            insets
         }
         lifecycleScope.launch {
             app.recovery.await()
@@ -170,6 +235,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun render() {
+        libraryTabButton.styleAsTab(!offline)
+        offlineTabButton.styleAsTab(offline)
         scroll.visibility = if (offline) View.VISIBLE else View.GONE
         library.visibility = if (offline) View.GONE else View.VISIBLE
         libraryActions.visibility = if (offline) View.GONE else View.VISIBLE
@@ -187,6 +254,7 @@ class MainActivity : ComponentActivity() {
         statusProgress.visibility = if (status.busy) View.VISIBLE else View.GONE
         statusProgress.progress = status.progress
         pauseButton.visibility = if (status.busy) View.VISIBLE else View.GONE
+        statusCard.visibility = if (text.isNotBlank() || status.busy) View.VISIBLE else View.GONE
     }
 
     private fun updateLibrary() {
@@ -221,32 +289,39 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun renderOffline() {
-        if (packWarning.isNotBlank()) root.addView(label(packWarning, 13f, muted))
+        if (packWarning.isNotBlank()) root.addView(label(packWarning, 13f, amber))
         root.addView(card().apply {
-            addView(label("01  English voice", 20f, ink, true))
+            addView(eyebrow("REQUIRED · OFFLINE SPEECH"))
+            addView(label("English voice", 20f, ink, true))
             addView(label("Select an installed offline English voice and listen to a short sample before dubbing.", 14f, muted))
-            addView(button("Check offline English voice", true) { lifecycleScope.launch { guarded {
+            val checkBtn = button("Verify voice", primary = true) { lifecycleScope.launch { guarded {
                 checkIdle(); toast("Checking offline speech generation…")
                 withContext(Dispatchers.IO) { OfflineVoice.verify(this@MainActivity) }
                 voices = withContext(Dispatchers.IO) { runCatching { OfflineVoice.availableVoices(this@MainActivity) }.getOrDefault(emptyList()) }
                 toast("Offline English voice generated audio successfully.")
                 if (offline) render()
-            } } })
-            addView(button("Play short voice sample") { lifecycleScope.launch { guarded {
+            } } }.apply { contentDescription = "Check offline English voice" }
+            val sampleBtn = button("Play sample") { lifecycleScope.launch { guarded {
                 checkIdle()
                 val preferred = getSharedPreferences("preparation", MODE_PRIVATE).getString("voiceName", null)
                 OfflineVoice.playSample(this@MainActivity, preferred)
-            } } })
+            } } }.apply { contentDescription = "Play short voice sample" }
+            addTwoColumnRow(checkBtn, sampleBtn)
             if (voices.isNotEmpty()) {
+                addView(divider())
+                addView(label("Preferred offline voice (${voices.size} available):", 13f, muted))
                 val prefVoice = getSharedPreferences("preparation", MODE_PRIVATE).getString("voiceName", null)
-                voices.take(6).forEach { option ->
-                    val active = option.name == prefVoice
-                    addView(button(if (active) "✓ ${option.label}" else "Use ${option.label}") {
-                        getSharedPreferences("preparation", MODE_PRIVATE).edit().putString("voiceName", option.name).apply()
-                        lifecycleScope.launch { guarded { OfflineVoice.playSample(this@MainActivity, option.name) } }
-                        render()
-                    })
-                }
+                val voiceLabels = voices.map { it.label }.toTypedArray()
+                val initialIdx = voices.indexOfFirst { it.name == prefVoice }.coerceAtLeast(0)
+                var userTouched = false
+                addView(styledSpinner(voiceLabels, initialIdx) { pos ->
+                    val chosen = voices[pos]
+                    getSharedPreferences("preparation", MODE_PRIVATE).edit().putString("voiceName", chosen.name).apply()
+                    if (userTouched) {
+                        lifecycleScope.launch { guarded { OfflineVoice.playSample(this@MainActivity, chosen.name) } }
+                    }
+                    userTouched = true
+                })
             }
             addView(button("Open Android voice settings") {
                 try { startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
@@ -254,29 +329,45 @@ class MainActivity : ComponentActivity() {
             })
         })
         root.addView(card().apply {
-            addView(label("02  Subtitle translation · experimental", 20f, ink, true))
+            addView(eyebrow("OPTIONAL · SUBTITLE TRANSLATION", amber))
+            addView(label("Subtitle translation packs", 20f, ink, true))
             addView(label("English subtitles need no translation pack. Hindi, Urdu, and Tamil packs are ~30 MB each (Wi-Fi); translation quality is experimental pending bilingual review.", 14f, muted))
             OfflineTranslation.languages.filterKeys { it != "en" }.forEach { (code, name) ->
-                addView(button(if (code in installed) "$name · installed · remove" else "Download $name") {
-                    if (code in installed) lifecycleScope.launch { guarded { checkIdle(); OfflineTranslation.delete(code); refreshPacks(); render() } }
+                val isInstalled = code in installed
+                addView(button(
+                    if (isInstalled) "✓ $name installed · Remove" else "Download $name (~30 MB)",
+                    destructive = isInstalled,
+                ) {
+                    if (isInstalled) lifecycleScope.launch { guarded { checkIdle(); OfflineTranslation.delete(code); refreshPacks(); render() } }
                     else startTask(PreparationService.TRANSLATION_PACK, code)
                 })
             }
         })
         root.addView(card().apply {
-            addView(label("03  Dialogue recognition · experimental", 20f, ink, true))
-            addView(label("Optional · 57 MB download\nFor films without subtitles. Translates Hindi, Urdu, or Tamil speech into English on your phone. Language quality is experimental.", 14f, muted))
-            addView(button(if (app.models.ready) "Speech pack installed · remove" else "Download speech pack", true) {
-                if (app.models.ready) { if (checkIdleUi()) { app.models.delete(); lifecycleScope.launch { refreshPacks(); render() } } }
+            addView(eyebrow("OPTIONAL · NO SUBTITLES", amber))
+            addView(label("Dialogue recognition", 20f, ink, true))
+            addView(label("57 MB download for films without subtitles. Translates Hindi, Urdu, or Tamil speech into English on your phone. Language quality is experimental.", 14f, muted))
+            val ready = app.models.ready
+            addView(button(
+                if (ready) "✓ Speech pack installed · Remove" else "Download speech pack (57 MB)",
+                primary = !ready,
+                destructive = ready,
+            ) {
+                if (ready) { if (checkIdleUi()) { app.models.delete(); lifecycleScope.launch { refreshPacks(); render() } } }
                 else AlertDialog.Builder(this@MainActivity).setTitle("Download speech pack?").setMessage("Download 57 MB using your current internet connection? After setup, speech processing works offline.")
                     .setNegativeButton("Cancel", null).setPositiveButton("Download") { _, _ -> startTask(PreparationService.SPEECH_PACK, "speech-pack") }.show()
             })
         })
         root.addView(card().apply {
-            addView(label("Speech detection · experimental", 18f, ink, true))
-            addView(label("Optional 0.9 MB detector. It can skip non-dialogue, but remains off by default until Hindi, Urdu, and Tamil quality is verified.", 14f, muted))
-            addView(button(if (app.models.vadReady) "Speech detector installed · remove" else "Download speech detector") {
-                if (app.models.vadReady) { if (checkIdleUi()) { app.models.deleteVad(); lifecycleScope.launch { refreshPacks(); render() } } }
+            addView(eyebrow("OPTIONAL · VOICE ACTIVITY", amber))
+            addView(label("Speech detector", 20f, ink, true))
+            addView(label("Optional 0.9 MB detector. Skips non-dialogue segments, but remains off by default until Hindi, Urdu, and Tamil quality is verified.", 14f, muted))
+            val vadReady = app.models.vadReady
+            addView(button(
+                if (vadReady) "✓ Detector installed · Remove" else "Download speech detector (0.9 MB)",
+                destructive = vadReady,
+            ) {
+                if (vadReady) { if (checkIdleUi()) { app.models.deleteVad(); lifecycleScope.launch { refreshPacks(); render() } } }
                 else startTask(PreparationService.VAD_PACK, "vad-pack")
             })
             val settings = getSharedPreferences("preparation", MODE_PRIVATE)
@@ -286,9 +377,10 @@ class MainActivity : ComponentActivity() {
                 isChecked = settings.getBoolean("vad", false)
                 setOnCheckedChangeListener { _, checked -> settings.edit().putBoolean("vad", checked).apply() }
             })
-            if (app.models.hasPartial) addView(button("Delete incomplete speech download") { if (checkIdleUi()) { app.models.deletePartial(); render() } })
+            if (app.models.hasPartial) addView(button("Delete incomplete speech download", destructive = true) { if (checkIdleUi()) { app.models.deletePartial(); render() } })
         })
         root.addView(card().apply {
+            addView(eyebrow("STORAGE & CACHE"))
             addView(label("Keep storage light", 20f, ink, true))
             val mb = { b: Long -> "%.1f MB".format(java.util.Locale.US, b / (1024.0 * 1024.0)) }
             addView(label(
@@ -300,33 +392,36 @@ class MainActivity : ComponentActivity() {
                     "Your original local video files are never modified or deleted.",
                 14f, muted
             ))
-            addView(button("Remove scene previews") { lifecycleScope.launch { guarded {
+            val clearPreviewsBtn = button("Clear previews") { lifecycleScope.launch { guarded {
                 checkIdle()
                 withContext(Dispatchers.IO) { ResourcePolicy.clearPreviews(app.filesDir) }
                 jobs.forEach { if (it.previewAudioPath != null) app.jobs.previewState(it.id, "none", "", null, it.previewStartMs) }
                 refreshPacks(); toast("Scene previews removed."); render()
-            } } })
-            addView(button("Clear reusable speech clips") { lifecycleScope.launch { guarded {
+            } } }.apply { contentDescription = "Remove scene previews" }
+            val clearCacheBtn = button("Clear speech cache") { lifecycleScope.launch { guarded {
                 checkIdle()
                 withContext(Dispatchers.IO) { ResourcePolicy.clearSpeechCache(app.filesDir, PreparationService.status.value.id) }
                 refreshPacks(); toast("Reusable speech clips cleared. Saved dubs are kept."); render()
-            } } })
-            addView(button("Remove completed dub audio files") { lifecycleScope.launch { guarded {
+            } } }.apply { contentDescription = "Clear reusable speech clips" }
+            addTwoColumnRow(clearPreviewsBtn, clearCacheBtn)
+
+            val clearDubsBtn = button("Remove dub audio", destructive = true) { lifecycleScope.launch { guarded {
                 checkIdle()
                 withContext(Dispatchers.IO) { ResourcePolicy.clearCompletedDubs(app.filesDir, PreparationService.status.value.id) }
                 jobs.filter { it.audioPath != null }.forEach {
                     app.jobs.save(it.copy(audioPath = null, state = "new", message = "Completed dub removed. Translations and cues are kept."))
                 }
                 refreshPacks(); toast("Completed dub files removed. User originals and translations are kept."); render()
-            } } })
-            addView(button("Remove app-owned downloads & packs") { lifecycleScope.launch { guarded {
+            } } }.apply { contentDescription = "Remove completed dub audio files" }
+            val clearDownloadsBtn = button("Remove downloads", destructive = true) { lifecycleScope.launch { guarded {
                 checkIdle()
                 val removedIds = withContext(Dispatchers.IO) { ResourcePolicy.clearAppDownloads(app.filesDir, PreparationService.status.value.id) }
                 jobs.filter { it.id in removedIds }.forEach {
                     app.jobs.state(it.id, "missing_file", "App-owned downloaded video was removed. Open a local file or download again.")
                 }
                 refreshPacks(); toast("App-owned downloads and packs removed. User-owned local files remain intact."); render()
-            } } })
+            } } }.apply { contentDescription = "Remove app-owned downloads and packs" }
+            addTwoColumnRow(clearDubsBtn, clearDownloadsBtn)
         })
     }
 
@@ -350,7 +445,7 @@ class MainActivity : ComponentActivity() {
                 externalSubtitleLanguage = job.sourceLanguage.takeIf { it in listOf("en", "hi", "ur", "ta") } ?: "en",
                 preferredLanguage = job.sourceLanguage.takeIf { it in listOf("hi", "ur", "ta") } ?: "hi",
             )
-            val panel = column().apply { setPadding(dp(18), dp(10), dp(18), dp(10)) }
+            val panel = column().apply { setPadding(dp(20), dp(12), dp(20), dp(12)) }
             panel.addView(label(rec.summary, 14f, mint, true))
             val trackSummary = buildString {
                 append("Audio tracks: ")
@@ -363,23 +458,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
             panel.addView(label(trackSummary, 13f, muted))
+            panel.addView(divider())
             var offsetMs = job.subtitleOffsetMs
             fun formatOffsetSummary(offset: Long): String {
                 val previewSuffix = if (existingCues.isNotEmpty()) {
                     val shifted = Subtitles.applyOffset(existingCues.take(1), offset).first()
-                    " · First cue preview: ${Subtitles.formatClock(shifted.startMs)} → ${Subtitles.formatClock(shifted.endMs)}"
+                    " · First cue: ${Subtitles.formatClock(shifted.startMs)} → ${Subtitles.formatClock(shifted.endMs)}"
                 } else ""
                 return "Subtitle timing offset: ${offset} ms$previewSuffix"
             }
-            val offsetLabel = label(formatOffsetSummary(offsetMs), 13f, ink)
+            val offsetLabel = label(formatOffsetSummary(offsetMs), 13f, ink, true)
             panel.addView(offsetLabel)
-            val offsetRow = row()
-            offsetRow.addView(button("−250 ms (Earlier)") { offsetMs -= 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(6) })
-            offsetRow.addView(button("+250 ms (Later)") { offsetMs += 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            panel.addView(offsetRow)
+            val earlierBtn = button("−250 ms (Earlier)") { offsetMs -= 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }
+            val laterBtn = button("+250 ms (Later)") { offsetMs += 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }
+            panel.addTwoColumnRow(earlierBtn, laterBtn)
+
             var selectedAudioTrack = if (job.audioTrackIndex >= 0) job.audioTrackIndex else rec.audioTrackIndex
             if (audioTracks.isNotEmpty()) {
-                panel.addView(label("Select audio track (never switches silently):", 13f, muted))
+                panel.addView(label("Audio track (never switches silently):", 13f, muted))
                 val audioButtons = mutableListOf<Pair<MediaTrackInfo, Button>>()
                 audioTracks.forEach { track ->
                     val btn = button("${if (selectedAudioTrack == track.index) "✓ " else ""}${track.label} · ${track.languageLabel}") {
@@ -392,7 +488,7 @@ class MainActivity : ComponentActivity() {
             }
             var selectedSubtitleTrack = if (job.subtitleTrackIndex >= 0) job.subtitleTrackIndex else rec.subtitleTrackIndex
             if (subTracks.isNotEmpty() && job.subtitleUri == null) {
-                panel.addView(label("Select embedded subtitle track:", 13f, muted))
+                panel.addView(label("Embedded subtitle track:", 13f, muted))
                 val subButtons = mutableListOf<Pair<MediaTrackInfo, Button>>()
                 subTracks.forEach { track ->
                     val btn = button("${if (selectedSubtitleTrack == track.index) "✓ " else ""}${track.label} · ${track.languageLabel}") {
@@ -403,23 +499,16 @@ class MainActivity : ComponentActivity() {
                     panel.addView(btn)
                 }
             }
+            panel.addView(divider())
             var selectedVoiceName = job.voiceName ?: getSharedPreferences("preparation", MODE_PRIVATE).getString("voiceName", null)
             if (availableVoices.isNotEmpty()) {
                 panel.addView(label("Offline English voice for this film:", 13f, muted))
                 val voiceNames = availableVoices.map { it.label }.toTypedArray()
                 val initialVoiceIdx = availableVoices.indexOfFirst { it.name == selectedVoiceName }.coerceAtLeast(0)
                 selectedVoiceName = availableVoices[initialVoiceIdx].name
-                val voiceSpinner = Spinner(this@MainActivity).apply {
-                    adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, voiceNames)
-                    setSelection(initialVoiceIdx)
-                    onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                        override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                            selectedVoiceName = availableVoices[pos].name
-                        }
-                        override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-                    }
-                }
-                panel.addView(voiceSpinner)
+                panel.addView(styledSpinner(voiceNames, initialVoiceIdx) { pos ->
+                    selectedVoiceName = availableVoices[pos].name
+                })
             }
             panel.addView(button("Play short voice sample") {
                 lifecycleScope.launch { guarded { OfflineVoice.playSample(this@MainActivity, selectedVoiceName) } }
@@ -432,7 +521,7 @@ class MainActivity : ComponentActivity() {
                 "Hindi dialogue · speech pack",
                 "Urdu dialogue · speech pack",
                 "Tamil dialogue · speech pack",
-                "Use existing English audio track (no AI dubbing)",
+                "Existing English audio (no AI dub)",
             )
             var selection = when {
                 job.overrideRecommendation && job.mode == "english_audio" -> 7
@@ -443,21 +532,14 @@ class MainActivity : ComponentActivity() {
                 rec.path == RecommendedPath.TRANSLATED_SUBTITLES -> listOf("en", "hi", "ur", "ta").indexOf(rec.languageCode).coerceAtLeast(1)
                 else -> 4 + listOf("hi", "ur", "ta").indexOf(rec.languageCode).coerceAtLeast(0)
             }
-            val modeSpinner = Spinner(this@MainActivity).apply {
-                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, names)
-                setSelection(selection)
-                onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                        selection = pos
-                        if (pos in 0..3 && job.subtitleUri == null) {
-                            val lang = listOf("en", "hi", "ur", "ta")[pos]
-                            subTracks.firstOrNull { it.languageCode == lang }?.let { selectedSubtitleTrack = it.index }
-                        }
-                    }
-                    override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            panel.addView(label("Preparation mode & source language:", 13f, muted))
+            panel.addView(styledSpinner(names, selection) { pos ->
+                selection = pos
+                if (pos in 0..3 && job.subtitleUri == null) {
+                    val lang = listOf("en", "hi", "ur", "ta")[pos]
+                    subTracks.firstOrNull { it.languageCode == lang }?.let { selectedSubtitleTrack = it.index }
                 }
-            }
-            panel.addView(modeSpinner)
+            })
             val dialogScroll = ScrollView(this@MainActivity).apply { addView(panel) }
             AlertDialog.Builder(this@MainActivity).setTitle("Choose source & prepare English")
                 .setView(dialogScroll)
@@ -530,16 +612,17 @@ class MainActivity : ComponentActivity() {
 
     private fun previewDialog(job: DubJob) {
         if (!checkIdleUi()) return
-        val input = EditText(this).apply {
-            hint = "Start time (e.g. 01:30 or 00:00)"
+        val box = column().apply { setPadding(dp(20), dp(8), dp(20), dp(4)) }
+        val input = inputField("Start time (e.g. 01:30 or 00:00)").apply {
             setText(Subtitles.formatClock(job.previewStartMs))
             setSingleLine()
         }
+        box.addView(input)
         AlertDialog.Builder(this).setTitle("Preview a 60-second scene")
             .setMessage("Prepare a 60-second scene using your selected track, language, voice, and subtitle offset (${job.subtitleOffsetMs} ms). Preview state stays separate from the full movie, and generated translations/speech clips are reused later.")
-            .setView(input)
+            .setView(box)
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Prepare 60s preview") { _, _ -> lifecycleScope.launch { guarded {
+            .setPositiveButton("Prepare 60s") { _, _ -> lifecycleScope.launch { guarded {
                 checkIdle()
                 val startMs = Subtitles.parseTimestampOrSeconds(input.text.toString())
                 startTask(PreparationService.PREVIEW, job.id, previewStartMs = startMs)
@@ -556,26 +639,32 @@ class MainActivity : ComponentActivity() {
             val legacyMissing = job.audioPath != null && allCues.any {
                 !it.subtitlesOnly && it.spokenEndMs > it.spokenStartMs && (it.pcmPath == null || !File(it.pcmPath).exists())
             }
-            val container = column().apply { setPadding(dp(16), dp(10), dp(16), dp(10)) }
+            val container = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
             if (legacyMissing) {
                 container.addView(label("Note: This earlier dub has no cached per-line speech clips on disk. On your first edit, missing reusable speech clips will be regenerated without repeating speech recognition or translation.", 13f, mint))
             }
-            val searchInput = EditText(this@MainActivity).apply { hint = "Search dialogue, timestamp (mm:ss), or 'warning'…"; setSingleLine() }
+            val searchInput = inputField("Search dialogue, mm:ss, or 'warning'…").apply { setSingleLine() }
             container.addView(searchInput)
-            val actionRow = row()
-            actionRow.addView(button("Pronunciations (${pronunciations.size})") { pronunciationDialog(job) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(6) })
-            actionRow.addView(button("Song ranges (${preservedRanges.size})") { songRangeDialog(job) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            container.addView(actionRow)
+            val pronBtn = button("Pronunciations (${pronunciations.size})") { pronunciationDialog(job) }
+            val songBtn = button("Song ranges (${preservedRanges.size})") { songRangeDialog(job) }
+            container.addTwoColumnRow(pronBtn, songBtn)
+
             var warningsOnly = false
-            val emptyLabel = label("No matching dialogue cues. Prepare a scene preview or dub first.", 14f, muted)
+            val emptyLabel = label("No matching dialogue cues. Prepare a scene preview or dub first.", 14f, muted).apply {
+                setPadding(0, dp(14), 0, dp(8))
+            }
             var displayedCues = emptyList<SavedCue>()
             val cueRecycler = RecyclerView(this@MainActivity).apply {
                 layoutManager = LinearLayoutManager(this@MainActivity)
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(360))
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)).apply {
+                    topMargin = dp(8)
+                }
             }
             val cueAdapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-                    val btn = parent.context.button("") {}
+                    val btn = parent.context.button("") {}.apply {
+                        gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                    }
                     return object : RecyclerView.ViewHolder(btn) {}
                 }
                 override fun getItemCount(): Int = displayedCues.size
@@ -620,26 +709,33 @@ class MainActivity : ComponentActivity() {
             })
             container.addView(emptyLabel)
             container.addView(cueRecycler)
-            AlertDialog.Builder(this@MainActivity).setTitle("Review & correct dialogue (${allCues.size} lines)")
+            val builder = AlertDialog.Builder(this@MainActivity).setTitle("Review & correct dialogue (${allCues.size} lines)")
                 .setView(container)
                 .setNegativeButton("Close", null)
-                .setPositiveButton("Rebuild English dub") { _, _ ->
+            if (allCues.isNotEmpty()) {
+                builder.setPositiveButton("Rebuild dub") { _, _ ->
                     if (checkIdleUi()) startTask(PreparationService.REBUILD, job.id)
-                }.show()
+                }
+            }
+            builder.show()
         } }
     }
 
     private fun editCueDialog(job: DubJob, cue: SavedCue) {
-        val box = column().apply { setPadding(dp(18), dp(10), dp(18), dp(10)) }
+        val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
         cue.originalTranscript(job.mode)?.let { box.addView(label("Original subtitle: $it", 13f, muted)) }
         val defaultStart = cue.effectiveStartMs(job.subtitleOffsetMs)
         val defaultEnd = cue.effectiveEndMs(job.subtitleOffsetMs)
-        val englishInput = EditText(this).apply { setText(cue.effectiveEnglish()); hint = "English dialogue" }
-        val startInput = EditText(this).apply { setText(defaultStart.toString()); hint = "Start (ms or mm:ss.SSS)" }
-        val endInput = EditText(this).apply { setText(defaultEnd.toString()); hint = "End (ms or mm:ss.SSS)" }
-        val subOnlySwitch = CheckBox(this).apply { text = "Subtitles only (keep original audio, no synthesized speech)"; setTextColor(ink); isChecked = cue.subtitlesOnly }
-        box.addView(label("English text (captions & speech):", 13f, mint)); box.addView(englishInput)
-        box.addView(label("Effective start / end (ms or mm:ss):", 13f, mint)); box.addView(startInput); box.addView(endInput)
+        val englishInput = inputField("English dialogue").apply { setText(cue.effectiveEnglish()) }
+        val startInput = inputField("Start (ms or mm:ss.SSS)").apply { setText(defaultStart.toString()); setSingleLine() }
+        val endInput = inputField("End (ms or mm:ss.SSS)").apply { setText(defaultEnd.toString()); setSingleLine() }
+        val subOnlySwitch = CheckBox(this).apply {
+            text = "Subtitles only (keep original audio, no synthesized speech)"
+            setTextColor(ink); minHeight = dp(48); isChecked = cue.subtitlesOnly
+        }
+        box.addView(label("English text (captions & speech):", 13f, mint, true)); box.addView(englishInput)
+        box.addView(label("Effective start / end (ms or mm:ss):", 13f, mint, true))
+        box.addTwoColumnRow(startInput, endInput)
         box.addView(subOnlySwitch)
         box.addView(button("Play this cue in player") {
             startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id).putExtra("startMs", cue.effectiveStartMs(job.subtitleOffsetMs)))
@@ -666,13 +762,13 @@ class MainActivity : ComponentActivity() {
     private fun pronunciationDialog(job: DubJob) {
         lifecycleScope.launch { guarded {
             val entries = app.jobs.pronunciations(job.id)
-            val box = column().apply { setPadding(dp(18), dp(10), dp(18), dp(10)) }
+            val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
             box.addView(label("Pronunciation replacements apply to spoken audio only; captions keep normal spelling.", 13f, muted))
-            val origInput = EditText(this@MainActivity).apply { hint = "Written word/name (e.g. Vijay)"; setSingleLine() }
-            val spokenInput = EditText(this@MainActivity).apply { hint = "Spoken phonetics (e.g. Vee-jay)"; setSingleLine() }
+            val origInput = inputField("Written word/name (e.g. Vijay)").apply { setSingleLine() }
+            val spokenInput = inputField("Spoken phonetics (e.g. Vee-jay)").apply { setSingleLine() }
             box.addView(origInput); box.addView(spokenInput)
             entries.forEach { entry ->
-                box.addView(button("${entry.original} → ${entry.spoken} (tap to remove)") {
+                box.addView(button("${entry.original} → ${entry.spoken} · Remove", destructive = true) {
                     lifecycleScope.launch {
                         app.jobs.deletePronunciation(job.id, entry.original)
                         toast("Removed pronunciation for ${entry.original}. Rebuild dub to apply.")
@@ -682,7 +778,7 @@ class MainActivity : ComponentActivity() {
             AlertDialog.Builder(this@MainActivity).setTitle("Pronunciation replacements")
                 .setView(box)
                 .setNegativeButton("Close", null)
-                .setPositiveButton("Add replacement") { _, _ -> lifecycleScope.launch { guarded {
+                .setPositiveButton("Add") { _, _ -> lifecycleScope.launch { guarded {
                     val from = origInput.text.toString().trim()
                     val to = spokenInput.text.toString().trim()
                     require(from.isNotEmpty() && to.isNotEmpty()) { "Enter both the written spelling and spoken pronunciation." }
@@ -695,13 +791,13 @@ class MainActivity : ComponentActivity() {
     private fun songRangeDialog(job: DubJob) {
         lifecycleScope.launch { guarded {
             val ranges = app.jobs.preservedRanges(job.id)
-            val box = column().apply { setPadding(dp(18), dp(10), dp(18), dp(10)) }
+            val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
             box.addView(label("Manual song ranges preserve original audio and show available English captions without synthesized speech. Automatic song detection and lyric translation are not claimed.", 13f, muted))
-            val startInput = EditText(this@MainActivity).apply { hint = "Start (e.g. 12:30)"; setSingleLine() }
-            val endInput = EditText(this@MainActivity).apply { hint = "End (e.g. 16:00)"; setSingleLine() }
-            box.addView(startInput); box.addView(endInput)
+            val startInput = inputField("Start (e.g. 12:30)").apply { setSingleLine() }
+            val endInput = inputField("End (e.g. 16:00)").apply { setSingleLine() }
+            box.addTwoColumnRow(startInput, endInput)
             ranges.forEach { r ->
-                box.addView(button("${Subtitles.formatClock(r.startMs)}–${Subtitles.formatClock(r.endMs)} (tap to remove)") {
+                box.addView(button("${Subtitles.formatClock(r.startMs)}–${Subtitles.formatClock(r.endMs)} · Remove", destructive = true) {
                     lifecycleScope.launch {
                         app.jobs.deletePreservedRange(job.id, r.startMs)
                         toast("Removed song range.")
@@ -711,7 +807,7 @@ class MainActivity : ComponentActivity() {
             AlertDialog.Builder(this@MainActivity).setTitle("Manual song / preserved-audio ranges")
                 .setView(box)
                 .setNegativeButton("Close", null)
-                .setPositiveButton("Add song range") { _, _ -> lifecycleScope.launch { guarded {
+                .setPositiveButton("Add range") { _, _ -> lifecycleScope.launch { guarded {
                     val s = Subtitles.parseTimestampOrSeconds(startInput.text.toString())
                     val e = Subtitles.parseTimestampOrSeconds(endInput.text.toString())
                     require(e > s) { "Song end time must be after start time." }
@@ -723,39 +819,40 @@ class MainActivity : ComponentActivity() {
 
     private fun queueDialog(job: DubJob) {
         if (!checkIdleUi()) return
-        val box = column().apply { setPadding(dp(18), dp(10), dp(18), dp(10)) }
+        val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
         box.addView(label("Queued films process one at a time within the active foreground session. Android imposes foreground-service time limits; if paused by Android or unplugged under charging-only mode, tap Resume to continue.", 13f, muted))
         var chargingOnly = job.chargingOnly
         val chargingCheck = CheckBox(this).apply {
             text = "Charging-only preparation (recommended default)"
-            setTextColor(ink); isChecked = chargingOnly
+            setTextColor(ink); minHeight = dp(48); isChecked = chargingOnly
             setOnCheckedChangeListener { _, checked -> chargingOnly = checked }
         }
         box.addView(chargingCheck)
         if (job.state == "queued") {
-            box.addView(button("Move earlier in queue (↑)") { lifecycleScope.launch { guarded {
+            val upBtn = button("Move earlier (↑)") { lifecycleScope.launch { guarded {
                 val reordered = ResourcePolicy.reorderQueue(app.jobs.queued(), job.id, -1)
                 reordered.forEach { app.jobs.save(it) }
                 toast("Moved earlier in queue.")
-            } } })
-            box.addView(button("Move later in queue (↓)") { lifecycleScope.launch { guarded {
+            } } }
+            val downBtn = button("Move later (↓)") { lifecycleScope.launch { guarded {
                 val reordered = ResourcePolicy.reorderQueue(app.jobs.queued(), job.id, 1)
                 reordered.forEach { app.jobs.save(it) }
                 toast("Moved later in queue.")
-            } } })
-            box.addView(button("Remove from queue") { lifecycleScope.launch { guarded {
+            } } }
+            box.addTwoColumnRow(upBtn, downBtn)
+            box.addView(button("Remove from queue", destructive = true) { lifecycleScope.launch { guarded {
                 app.jobs.updateQueue(job.id, 0, chargingOnly, "new", "Removed from preparation queue.")
             } } })
         }
         AlertDialog.Builder(this).setTitle("Preparation queue")
             .setView(box)
             .setNegativeButton("Cancel", null)
-            .setNeutralButton("Queue for later") { _, _ -> lifecycleScope.launch { guarded {
+            .setNeutralButton("Queue later") { _, _ -> lifecycleScope.launch { guarded {
                 val nextOrder = (app.jobs.queued().maxOfOrNull { it.queueOrder } ?: 0) + 1
                 val order = if (job.state == "queued" && job.queueOrder > 0) job.queueOrder else nextOrder
                 app.jobs.updateQueue(job.id, order, chargingOnly, "queued", "Queued (#$order · ${if (chargingOnly) "charging-only" else "battery allowed"}).")
             } } }
-            .setPositiveButton("Start queue now") { _, _ -> lifecycleScope.launch { guarded {
+            .setPositiveButton("Start now") { _, _ -> lifecycleScope.launch { guarded {
                 checkIdle()
                 val nextOrder = (app.jobs.queued().maxOfOrNull { it.queueOrder } ?: 0) + 1
                 val order = if (job.state == "queued" && job.queueOrder > 0) job.queueOrder else nextOrder
@@ -782,9 +879,14 @@ class MainActivity : ComponentActivity() {
 
     private fun linkDialog() {
         if (!checkIdleUi()) return
-        val input = EditText(this).apply { hint = "https://example.com/movie.mp4"; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI; setSingleLine() }
+        val box = column().apply { setPadding(dp(20), dp(8), dp(20), dp(4)) }
+        val input = inputField("https://example.com/movie.mp4").apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine()
+        }
+        box.addView(input)
         AlertDialog.Builder(this).setTitle("Download video").setMessage("Paste a direct downloadable media URL. The complete video is saved before dubbing.")
-            .setView(input).setNegativeButton("Cancel", null).setPositiveButton("Download") { _, _ -> lifecycleScope.launch { guarded {
+            .setView(box).setNegativeButton("Cancel", null).setPositiveButton("Download") { _, _ -> lifecycleScope.launch { guarded {
                 checkIdle(); val url = input.text.toString().trim(); val parsed = URI(url)
                 require(parsed.scheme in listOf("http", "https") && !parsed.host.isNullOrBlank()) { "Enter a valid HTTP or HTTPS video URL." }
                 val name = parsed.path?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "Downloaded video"

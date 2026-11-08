@@ -88,13 +88,54 @@ class PlayerActivity : ComponentActivity() {
         val prefs = getSharedPreferences("playback", MODE_PRIVATE)
         backgroundVolume = prefs.getFloat("backgroundVolume", 0.15f)
         val layout = column().apply { setBackgroundColor(canvasColor) }
-        val title = label("EnglishDub", 18f, mint, true).apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }
-        layout.addView(title)
-        playerView = PlayerView(this).apply { setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) }
+
+        val topBar = row().apply {
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(8), dp(18), dp(8))
+        }
+        val backBtn = button("← Back") { finish() }.apply {
+            contentDescription = "Navigate back"
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { rightMargin = dp(12) }
+        }
+        val title = label("EnglishDub", 17f, ink, true).apply {
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        topBar.addView(backBtn)
+        topBar.addView(title)
+        layout.addView(topBar)
+
+        playerView = PlayerView(this).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+        }
         layout.addView(playerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        val controls = column().apply { setPadding(dp(18), dp(8), dp(18), dp(14)) }
-        caption = label("", captionSizeSp, ink).apply { contentDescription = "English captions" }
+
+        val controls = column().apply {
+            setBackgroundColor(canvasColor)
+            setPadding(dp(16), dp(10), dp(16), dp(12))
+        }
+        caption = label("", captionSizeSp, ink).apply {
+            contentDescription = "English captions"
+            gravity = android.view.Gravity.CENTER
+            minHeight = dp(52)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(cardColor)
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), borderSubtle)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) }
+        }
         controls.addView(caption)
+
         val toggle = Switch(this).apply {
             text = if (previewMode) "60s preview dub (toggle to compare original)" else "Prepared English dub"
             contentDescription = text
@@ -102,12 +143,15 @@ class PlayerActivity : ComponentActivity() {
             setOnCheckedChangeListener { _, checked -> english = checked; synchronize(force = true) }
         }
         controls.addView(toggle)
+
         volumeLabel = label("Original audio during speech · ${(backgroundVolume * 100).toInt()}%", 13f, muted)
         controls.addView(volumeLabel)
         volumeSeek = SeekBar(this).apply {
             max = 100; progress = (backgroundVolume * 100).toInt()
             contentDescription = "Original audio volume during English speech"
             minimumHeight = dp(48)
+            progressTintList = android.content.res.ColorStateList.valueOf(mint)
+            thumbTintList = android.content.res.ColorStateList.valueOf(mint)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     backgroundVolume = progress / 100f
@@ -121,14 +165,23 @@ class PlayerActivity : ComponentActivity() {
             })
         }
         controls.addView(volumeSeek)
-        val actionRow = row()
-        val replayButton = button("Replay last dialogue") {
+
+        val actionRow = row().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(6) }
+        }
+        val replayButton = button("Replay line") {
             val master = video ?: return@button
             val target = DubTiming.replayTargetMs(cues, master.currentPosition, job?.subtitleOffsetMs ?: 0L)
             master.seekTo(target.coerceAtLeast(if (previewMode) previewOffsetMs else 0L))
             synchronize(force = true)
+        }.apply {
+            contentDescription = "Replay last dialogue"
         }
         actionRow.addView(replayButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(6) })
+
         captionControlButton = button(captionButtonText()) {
             val sizes = listOf(14f, 16f, 20f, 24f)
             if (!captionsEnabled) {
@@ -146,8 +199,8 @@ class PlayerActivity : ComponentActivity() {
             persistPreferences()
             synchronize()
         }
-        actionRow.addView(captionControlButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        controls.addView(actionRow)
+        actionRow.addView(captionControlButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.15f).apply { rightMargin = dp(6) })
+
         val speedButton = button("Speed · 1×") { }
         speedButton.setOnClickListener {
             val speeds = listOf(1f, 1.25f, 1.5f, 2f)
@@ -156,7 +209,9 @@ class PlayerActivity : ComponentActivity() {
             video?.setPlaybackSpeed(speed); dub?.setPlaybackSpeed(speed); speedButton.text = "Speed · ${speed}×"
             speedButton.contentDescription = speedButton.text
         }
-        controls.addView(speedButton)
+        actionRow.addView(speedButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.85f))
+        controls.addView(actionRow)
+
         layout.addView(controls)
         setContentView(layout)
         ViewCompat.setOnApplyWindowInsetsListener(layout) { view, insets ->
@@ -208,14 +263,15 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun captionButtonText(): String =
-        if (captionsEnabled) "Captions · On (${captionSizeSp.toInt()}sp)" else "Captions · Off"
+        if (captionsEnabled) "Captions · ${captionSizeSp.toInt()}sp" else "Captions · Off"
 
     private fun applyCaptionStyle() {
         caption.textSize = captionSizeSp
         caption.visibility = if (captionsEnabled) View.VISIBLE else View.INVISIBLE
         if (::captionControlButton.isInitialized) {
             captionControlButton.text = captionButtonText()
-            captionControlButton.contentDescription = captionControlButton.text
+            captionControlButton.contentDescription =
+                if (captionsEnabled) "Captions · On (${captionSizeSp.toInt()}sp)" else "Captions · Off"
         }
     }
 
