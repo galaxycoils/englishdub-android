@@ -41,6 +41,44 @@ object Subtitles {
         cue.copy(startMs = start, endMs = end)
     }
 
+    /** Binary search for a cue covering timeMs (effectiveStartMs <= timeMs < effectiveEndMs). O(log N). */
+    fun findCueAt(cues: List<SavedCue>, timeMs: Long, subtitleOffsetMs: Long = 0L): SavedCue? {
+        if (cues.isEmpty()) return null
+        var low = 0
+        var high = cues.lastIndex
+        var found = -1
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (cues[mid].effectiveStartMs(subtitleOffsetMs) <= timeMs) {
+                found = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        val candidate = cues.getOrNull(found) ?: return null
+        return if (timeMs < candidate.effectiveEndMs(subtitleOffsetMs)) candidate else null
+    }
+
+    /** Binary search for spoken audio cue covering timeMs (spokenStartMs <= timeMs < spokenEndMs). O(log N). */
+    fun findSpokenCueAt(cues: List<SavedCue>, timeMs: Long): SavedCue? {
+        if (cues.isEmpty()) return null
+        var low = 0
+        var high = cues.lastIndex
+        var found = -1
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (cues[mid].spokenStartMs <= timeMs) {
+                found = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        val candidate = cues.getOrNull(found) ?: return null
+        return if (!candidate.subtitlesOnly && candidate.spokenEndMs > candidate.spokenStartMs && timeMs < candidate.spokenEndMs) candidate else null
+    }
+
     fun searchCues(cues: List<SavedCue>, query: String, mode: String, offsetMs: Long = 0L): List<SavedCue> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return cues

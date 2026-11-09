@@ -1,9 +1,15 @@
 package app.englishdub.ui
 
+import android.app.AlertDialog
+import android.app.PictureInPictureParams
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Rational
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
@@ -34,6 +40,10 @@ class PlayerActivity : ComponentActivity() {
     private val app get() = application as DubApplication
     private var video: ExoPlayer? = null
     private var dub: ExoPlayer? = null
+    private lateinit var topBar: LinearLayout
+    private lateinit var controls: LinearLayout
+    private lateinit var seekFeedback: TextView
+    private val hideSeekFeedback = Runnable { seekFeedback.visibility = View.GONE }
     private lateinit var playerView: PlayerView
     private lateinit var caption: TextView
     private lateinit var volumeLabel: TextView
@@ -90,7 +100,7 @@ class PlayerActivity : ComponentActivity() {
         val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val layout = column().apply { setBackgroundColor(canvasColor) }
 
-        val topBar = row().apply {
+        topBar = row().apply {
             gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(if (isLandscape) 4 else 8), dp(18), dp(if (isLandscape) 4 else 8))
         }
@@ -108,6 +118,14 @@ class PlayerActivity : ComponentActivity() {
         }
         topBar.addView(backBtn)
         topBar.addView(title)
+        val pipBtn = button("⧉ PiP") { enterPipMode() }.apply {
+            contentDescription = "Enter Picture in Picture"
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { leftMargin = dp(6) }
+        }
+        topBar.addView(pipBtn)
         layout.addView(topBar)
 
         playerView = PlayerView(this).apply {
@@ -115,7 +133,55 @@ class PlayerActivity : ComponentActivity() {
             setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
         }
 
-        val controls = column().apply {
+        seekFeedback = label("", 22f, ink, true).apply {
+            gravity = android.view.Gravity.CENTER
+            visibility = View.GONE
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.argb(200, 16, 22, 20))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), borderSubtle)
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER
+            )
+        }
+
+        val playerContainer = FrameLayout(this).apply {
+            addView(playerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(seekFeedback)
+        }
+
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val width = playerView.width
+                if (width <= 0) return false
+                val master = video ?: return false
+                if (e.x < width / 3) {
+                    val target = (master.currentPosition - 10_000L).coerceAtLeast(if (previewMode) previewOffsetMs else 0L)
+                    master.seekTo(target)
+                    synchronize(force = true)
+                    showSeekFeedback("« 10s")
+                    return true
+                } else if (e.x > width * 2 / 3) {
+                    val target = master.currentPosition + 10_000L
+                    master.seekTo(target)
+                    synchronize(force = true)
+                    showSeekFeedback("10s »")
+                    return true
+                }
+                return false
+            }
+        })
+        playerView.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            false
+        }
+
+        controls = column().apply {
             setBackgroundColor(canvasColor)
             setPadding(dp(16), dp(if (isLandscape) 6 else 10), dp(16), dp(12))
         }
@@ -182,6 +248,11 @@ class PlayerActivity : ComponentActivity() {
         }
         actionRow.addView(replayButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(6) })
 
+        val syncButton = button("Sync ±") { showTimingSyncDialog() }.apply {
+            contentDescription = "Fine-tune subtitle and speech timing offset"
+        }
+        actionRow.addView(syncButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.95f).apply { rightMargin = dp(6) })
+
         captionControlButton = button(captionButtonText()) {
             val sizes = listOf(14f, 16f, 20f, 24f)
             if (!captionsEnabled) {
@@ -217,11 +288,11 @@ class PlayerActivity : ComponentActivity() {
             val split = row().apply {
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             }
-            split.addView(playerView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.35f))
+            split.addView(playerContainer, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.35f))
             split.addView(scrollable(controls), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             layout.addView(split)
         } else {
-            layout.addView(playerView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            layout.addView(playerContainer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             layout.addView(controls)
         }
         setContentView(layout)
@@ -428,17 +499,84 @@ class PlayerActivity : ComponentActivity() {
         } finally { syncing = false }
     }
 
-    private fun findSpokenCue(timeMs: Long): SavedCue? {
-        var low = 0; var high = cues.lastIndex; var found = -1
-        while (low <= high) {
-            val mid = (low + high) ushr 1
-            if (cues[mid].spokenStartMs <= timeMs) { found = mid; low = mid + 1 } else high = mid - 1
-        }
-        return cues.getOrNull(found)?.takeIf { !it.subtitlesOnly && it.spokenEndMs > it.spokenStartMs && timeMs < it.spokenEndMs }
-    }
+    private fun findSpokenCue(timeMs: Long): SavedCue? = Subtitles.findSpokenCueAt(cues, timeMs)
 
     private fun findEffectiveCue(timeMs: Long, subtitleOffsetMs: Long): SavedCue? =
-        cues.firstOrNull { timeMs in it.effectiveStartMs(subtitleOffsetMs) until it.effectiveEndMs(subtitleOffsetMs) }
+        Subtitles.findCueAt(cues, timeMs, subtitleOffsetMs)
+
+    private fun showTimingSyncDialog() {
+        val item = job ?: return
+        val box = column().apply { setPadding(dp(20), dp(10), dp(20), dp(10)) }
+        var currentOffset = item.subtitleOffsetMs
+        val offsetStatus = label("Subtitle timing offset: ${currentOffset} ms", 14f, mint, true)
+        box.addView(offsetStatus)
+        box.addView(label("Adjust timing while watching if speech or captions are slightly early or late.", 13f, muted))
+        fun updateOffset(delta: Long) {
+            currentOffset += delta
+            offsetStatus.text = "Subtitle timing offset: ${currentOffset} ms"
+            job = item.copy(subtitleOffsetMs = currentOffset)
+            lifecycleScope.launch {
+                app.jobs.configureSource(
+                    id = item.id,
+                    mode = item.mode,
+                    language = item.sourceLanguage,
+                    audioTrack = item.audioTrackIndex,
+                    subtitleTrack = item.subtitleTrackIndex,
+                    offsetMs = currentOffset,
+                    voiceName = item.voiceName,
+                    overrideRec = item.overrideRecommendation,
+                    chargingOnly = item.chargingOnly,
+                    state = item.state,
+                    message = item.message,
+                )
+            }
+            synchronize(force = true)
+        }
+        val earlierBtn = button("−250 ms (Earlier)") { updateOffset(-250L) }
+        val laterBtn = button("+250 ms (Later)") { updateOffset(250L) }
+        box.addTwoColumnRow(earlierBtn, laterBtn)
+        val resetBtn = button("Reset to 0 ms") {
+            val delta = -currentOffset
+            updateOffset(delta)
+        }
+        box.addView(resetBtn)
+        AlertDialog.Builder(this).setTitle("Fine-tune subtitle timing")
+            .setView(scrollable(box))
+            .setPositiveButton("Done", null)
+            .show()
+    }
+
+    private fun enterPipMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (_: Exception) {}
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (video?.isPlaying == true && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            enterPipMode()
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (::topBar.isInitialized) topBar.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        if (::controls.isInitialized) controls.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        playerView.useController = !isInPictureInPictureMode
+    }
+
+    private fun showSeekFeedback(text: String) {
+        seekFeedback.text = text
+        seekFeedback.visibility = View.VISIBLE
+        handler.removeCallbacks(hideSeekFeedback)
+        handler.postDelayed(hideSeekFeedback, 650L)
+    }
 
     override fun onStart() { super.onStart(); active = true; if (job != null) openPlayers() }
     override fun onStop() {

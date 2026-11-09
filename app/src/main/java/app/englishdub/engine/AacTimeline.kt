@@ -48,7 +48,6 @@ object AacTimeline {
                         val buffer = codec.getInputBuffer(index)!!
                         buffer.clear()
                         val count = minOf(buffer.remaining() / 2L, bytes.size / 2L, (totalFrames - framesWritten).coerceAtLeast(0)).toInt()
-                        bytes.fill(0)
                         var filled = 0
                         while (filled < count) {
                             val frame = framesWritten + filled
@@ -58,7 +57,10 @@ object AacTimeline {
                             val cue = activeCues.getOrNull(cueIndex)
                             val cueStart = cue?.spokenStartMs?.times(AudioTools.RATE)?.div(1000) ?: totalFrames
                             if (cue == null || frame < cueStart) {
-                                filled += minOf(count - filled, (cueStart - frame).toInt().coerceAtLeast(1)); continue
+                                val silenceFrames = minOf(count - filled, (cueStart - frame).toInt().coerceAtLeast(1))
+                                bytes.fill(0, filled * 2, (filled + silenceFrames) * 2)
+                                filled += silenceFrames
+                                continue
                             }
                             if (openedCue != cueIndex) {
                                 speech?.close()

@@ -60,13 +60,19 @@ class LibraryAdapter(
 
             fun makeBtn(key: String, primary: Boolean = false, destructive: Boolean = false): Button {
                 val btn = context.button(key, primary = primary, destructive = destructive) {
-                    item?.let { action(key, it) }
+                    val targetJob = item ?: DubJob(
+                        id = "demo-sample",
+                        title = "Sample: Welcome to EnglishDub",
+                        mediaUri = "",
+                    )
+                    action(key, targetJob)
                 }
                 buttons[key] = btn
                 return btn
             }
 
             // Primary playback / recovery actions
+            card.addView(makeBtn("demo", primary = true))
             card.addView(makeBtn("watch", primary = true))
             card.addView(makeBtn("watch_preview"))
             card.addView(makeBtn("auto_setup", primary = true))
@@ -136,6 +142,18 @@ class LibraryAdapter(
                 it.isEnabled = !row.busy
             }
             if (job == null) {
+                state.text = "WELCOME"
+                state.setTextColor(mint)
+                title.text = "Welcome to EnglishDub"
+                message.text = "Watch Hindi, Urdu, and Tamil films with offline English dubbing:\n\n" +
+                    "1. Open a video — pick any video on your phone\n" +
+                    "2. Choose an English voice & preview a 60s scene\n" +
+                    "3. Watch with synchronized offline English speech!"
+                buttons["demo"]?.apply {
+                    visibility = View.VISIBLE
+                    text = "▶ Try 10-Second Sample Demo"
+                    contentDescription = "Try a 10-second offline sample demo"
+                }
                 toolsDivider.visibility = View.GONE
                 prepRow.visibility = View.GONE
                 editRow.visibility = View.GONE

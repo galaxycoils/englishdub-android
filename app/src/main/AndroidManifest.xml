@@ -11,7 +11,10 @@
         android:theme="@style/AppTheme" android:icon="@drawable/ic_app" android:roundIcon="@drawable/ic_app"
         android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true">
-        <activity android:name=".ui.PlayerActivity" android:configChanges="orientation|screenSize" android:exported="false" />
+        <activity android:name=".ui.PlayerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
+            android:supportsPictureInPicture="true"
+            android:exported="false" />
         <activity android:name=".ui.MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

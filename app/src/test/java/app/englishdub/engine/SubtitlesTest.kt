@@ -39,4 +39,41 @@ class SubtitlesTest {
         resampler.sample(0f) { output += it }; resampler.sample(1f) { output += it }
         assertEquals(listOf(0f, 0.5f, 1f), output)
     }
+    @Test fun `findCueAt binary search returns matching cue and handles boundaries and offsets`() {
+        val cues = listOf(
+            app.englishdub.data.SavedCue("job", 0, startMs = 1000L, endMs = 3000L, text = "First", english = "First", spokenStartMs = 1000L, spokenEndMs = 2800L),
+            app.englishdub.data.SavedCue("job", 1, startMs = 4000L, endMs = 6000L, text = "Second", english = "Second", spokenStartMs = 4100L, spokenEndMs = 5900L),
+            app.englishdub.data.SavedCue("job", 2, startMs = 7000L, endMs = 9000L, text = "Third", english = "Third", spokenStartMs = 7000L, spokenEndMs = 8500L),
+        )
+        assertNull(Subtitles.findCueAt(emptyList(), 2000L))
+        assertNull(Subtitles.findCueAt(cues, 500L))
+        assertEquals("First", Subtitles.findCueAt(cues, 1000L)?.english)
+        assertEquals("First", Subtitles.findCueAt(cues, 2000L)?.english)
+        assertNull(Subtitles.findCueAt(cues, 3000L))
+        assertNull(Subtitles.findCueAt(cues, 3500L))
+        assertEquals("Second", Subtitles.findCueAt(cues, 5000L)?.english)
+        assertNull(Subtitles.findCueAt(cues, 9500L))
+
+        // Positive offset (+500ms): first cue active 1500..3500
+        assertNull(Subtitles.findCueAt(cues, 1200L, subtitleOffsetMs = 500L))
+        assertEquals("First", Subtitles.findCueAt(cues, 1500L, subtitleOffsetMs = 500L)?.english)
+        assertEquals("First", Subtitles.findCueAt(cues, 3200L, subtitleOffsetMs = 500L)?.english)
+
+        // Negative offset (-500ms): second cue active 3500..5500
+        assertEquals("Second", Subtitles.findCueAt(cues, 3600L, subtitleOffsetMs = -500L)?.english)
+        assertNull(Subtitles.findCueAt(cues, 5600L, subtitleOffsetMs = -500L))
+    }
+    @Test fun `findSpokenCueAt returns cue where audio is currently speaking`() {
+        val cues = listOf(
+            app.englishdub.data.SavedCue("job", 0, startMs = 1000L, endMs = 3000L, text = "First", spokenStartMs = 1200L, spokenEndMs = 2800L),
+            app.englishdub.data.SavedCue("job", 1, startMs = 4000L, endMs = 6000L, text = "SubOnly", spokenStartMs = 4000L, spokenEndMs = 5500L, subtitlesOnly = true),
+            app.englishdub.data.SavedCue("job", 2, startMs = 7000L, endMs = 9000L, text = "Third", spokenStartMs = 7000L, spokenEndMs = 8800L),
+        )
+        assertNull(Subtitles.findSpokenCueAt(cues, 1000L))
+        assertEquals("First", Subtitles.findSpokenCueAt(cues, 1500L)?.text)
+        assertEquals("First", Subtitles.findSpokenCueAt(cues, 2799L)?.text)
+        assertNull(Subtitles.findSpokenCueAt(cues, 2800L))
+        assertNull(Subtitles.findSpokenCueAt(cues, 4500L))
+        assertEquals("Third", Subtitles.findSpokenCueAt(cues, 7500L)?.text)
+    }
 }

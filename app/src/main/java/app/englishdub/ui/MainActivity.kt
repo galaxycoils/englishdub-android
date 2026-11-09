@@ -346,6 +346,7 @@ class MainActivity : ComponentActivity() {
     private fun libraryAction(action: String, job: DubJob) {
         if (!checkIdleUi()) return
         when (action) {
+            "demo" -> launchDemo()
             "watch" -> startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id))
             "watch_preview" -> startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id).putExtra("preview", true))
             "auto_setup" -> startAutoSetup()
@@ -367,6 +368,105 @@ class MainActivity : ComponentActivity() {
                     checkIdle(); withContext(Dispatchers.IO) { app.jobDirectory(job.id).deleteRecursively() }; app.jobs.delete(job.id)
                 } } }.show()
         }
+    }
+
+    private fun launchDemo() {
+        if (!checkIdleUi()) return
+        lifecycleScope.launch { guarded {
+            val demoId = "demo-sample"
+            val demoDir = app.jobDirectory(demoId)
+            val demoBackground = File(demoDir, "demo_background.m4a")
+            val demoDub = File(demoDir, "demo_dub.m4a")
+
+            val existing = app.jobs.get(demoId)
+            if (existing != null && demoDub.exists() && demoBackground.exists()) {
+                startActivity(Intent(this@MainActivity, PlayerActivity::class.java).putExtra("id", demoId))
+                return@guarded
+            }
+
+            toast("Preparing 10-second offline demo…")
+            withContext(Dispatchers.IO) {
+                demoDir.mkdirs()
+                val demoCues = listOf(
+                    SavedCue(
+                        jobId = demoId,
+                        index = 0,
+                        startMs = 0L,
+                        endMs = 3500L,
+                        text = "Welcome to EnglishDub on your Android phone.",
+                        english = "Welcome to EnglishDub on your Android phone.",
+                        spokenStartMs = 0L,
+                        spokenEndMs = 3500L,
+                        subtitlesOnly = false,
+                        transcriptAvailable = true,
+                    ),
+                    SavedCue(
+                        jobId = demoId,
+                        index = 1,
+                        startMs = 3500L,
+                        endMs = 7000L,
+                        text = "This speech is generated completely offline.",
+                        english = "This speech is generated completely offline.",
+                        spokenStartMs = 3500L,
+                        spokenEndMs = 7000L,
+                        subtitlesOnly = false,
+                        transcriptAvailable = true,
+                    ),
+                    SavedCue(
+                        jobId = demoId,
+                        index = 2,
+                        startMs = 7000L,
+                        endMs = 10000L,
+                        text = "Enjoy films in English with smooth synchronized audio!",
+                        english = "Enjoy films in English with smooth synchronized audio!",
+                        spokenStartMs = 7000L,
+                        spokenEndMs = 10000L,
+                        subtitlesOnly = false,
+                        transcriptAvailable = true,
+                    ),
+                )
+
+                val voiceName = getSharedPreferences("preparation", MODE_PRIVATE).getString("voiceName", null)
+                val cacheDir = File(app.filesDir, "speech-cache")
+                val cache = CueAudioCache(cacheDir, voiceName ?: "default", compressed = true)
+                val synthesizedCues = mutableListOf<SavedCue>()
+                runCatching {
+                    OfflineVoice.create(this@MainActivity, voiceName).use { voice ->
+                        for (c in demoCues) {
+                            val asset = cache.get(c.effectiveEnglish(), 1f) { file, speed ->
+                                voice.synthesize(c.effectiveEnglish(), file, speed)
+                            }
+                            synthesizedCues += c.copy(pcmPath = asset.file.path, rate = AudioTools.RATE)
+                        }
+                    }
+                }
+
+                val activeCues = if (synthesizedCues.size == demoCues.size) synthesizedCues else emptyList()
+                AacTimeline.encode(activeCues, 10000L, demoDub) { }
+                AacTimeline.encode(emptyList(), 10000L, demoBackground) { }
+
+                val demoJob = DubJob(
+                    id = demoId,
+                    title = "Sample: Welcome to EnglishDub",
+                    mediaUri = Uri.fromFile(demoBackground).toString(),
+                    subtitleUri = null,
+                    sourceLanguage = "en",
+                    mode = "subtitles",
+                    state = "ready",
+                    progress = 100,
+                    message = "10-second offline demo ready. Tap Watch to experience offline dubbing.",
+                    audioPath = demoDub.path,
+                    durationMs = 10000L,
+                    decodedUntilMs = 10000L,
+                    voiceName = voiceName,
+                    backgroundVolume = 0.15f,
+                    captionsEnabled = true,
+                )
+                app.jobs.save(demoJob)
+                app.jobs.saveCues(synthesizedCues.ifEmpty { demoCues })
+            }
+            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).putExtra("id", demoId))
+        } }
     }
 
     private fun renderOffline() {
@@ -496,6 +596,17 @@ class MainActivity : ComponentActivity() {
                     "Your original local video files are never modified or deleted.",
                 14f, muted
             ))
+            val freeTempBtn = button("Free temporary cache space", primary = true) { lifecycleScope.launch { guarded {
+                checkIdle()
+                withContext(Dispatchers.IO) {
+                    ResourcePolicy.clearPreviews(app.filesDir)
+                    ResourcePolicy.clearSpeechCache(app.filesDir, PreparationService.status.value.id)
+                }
+                jobs.forEach { if (it.previewAudioPath != null) app.jobs.previewState(it.id, "none", "", null, it.previewStartMs) }
+                refreshPacks(); toast("Temporary cache and scene previews cleared. Saved dubs are kept."); render()
+            } } }.apply { contentDescription = "Free temporary preview and speech cache space" }
+            addView(freeTempBtn)
+
             val clearPreviewsBtn = button("Clear previews") { lifecycleScope.launch { guarded {
                 checkIdle()
                 withContext(Dispatchers.IO) { ResourcePolicy.clearPreviews(app.filesDir) }
@@ -550,7 +661,8 @@ class MainActivity : ComponentActivity() {
                 preferredLanguage = job.sourceLanguage.takeIf { it in listOf("hi", "ur", "ta") } ?: "hi",
             )
             val panel = column().apply { setPadding(dp(20), dp(12), dp(20), dp(12)) }
-            panel.addView(label(rec.summary, 14f, mint, true))
+            panel.addView(eyebrow("RECOMMENDED SOURCE SETUP"))
+            panel.addView(label(rec.summary, 15f, mint, true))
             val trackSummary = buildString {
                 append("Audio tracks: ")
                 if (audioTracks.isEmpty()) append("Default") else append(audioTracks.joinToString { "#${it.index} ${it.label} [${it.languageLabel}]" })
@@ -563,50 +675,10 @@ class MainActivity : ComponentActivity() {
             }
             panel.addView(label(trackSummary, 13f, muted))
             panel.addView(divider())
-            var offsetMs = job.subtitleOffsetMs
-            fun formatOffsetSummary(offset: Long): String {
-                val previewSuffix = if (existingCues.isNotEmpty()) {
-                    val shifted = Subtitles.applyOffset(existingCues.take(1), offset).first()
-                    " · First cue: ${Subtitles.formatClock(shifted.startMs)} → ${Subtitles.formatClock(shifted.endMs)}"
-                } else ""
-                return "Subtitle timing offset: ${offset} ms$previewSuffix"
-            }
-            val offsetLabel = label(formatOffsetSummary(offsetMs), 13f, ink, true)
-            panel.addView(offsetLabel)
-            val earlierBtn = button("−250 ms (Earlier)") { offsetMs -= 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }
-            val laterBtn = button("+250 ms (Later)") { offsetMs += 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }
-            panel.addTwoColumnRow(earlierBtn, laterBtn)
 
-            var selectedAudioTrack = if (job.audioTrackIndex >= 0) job.audioTrackIndex else rec.audioTrackIndex
-            if (audioTracks.isNotEmpty()) {
-                panel.addView(label("Audio track (never switches silently):", 13f, muted))
-                val audioButtons = mutableListOf<Pair<MediaTrackInfo, Button>>()
-                audioTracks.forEach { track ->
-                    val btn = button("${if (selectedAudioTrack == track.index) "✓ " else ""}${track.label} · ${track.languageLabel}") {
-                        selectedAudioTrack = track.index
-                        audioButtons.forEach { (t, b) -> b.text = "${if (selectedAudioTrack == t.index) "✓ " else ""}${t.label} · ${t.languageLabel}" }
-                    }
-                    audioButtons += track to btn
-                    panel.addView(btn)
-                }
-            }
-            var selectedSubtitleTrack = if (job.subtitleTrackIndex >= 0) job.subtitleTrackIndex else rec.subtitleTrackIndex
-            if (subTracks.isNotEmpty() && job.subtitleUri == null) {
-                panel.addView(label("Embedded subtitle track:", 13f, muted))
-                val subButtons = mutableListOf<Pair<MediaTrackInfo, Button>>()
-                subTracks.forEach { track ->
-                    val btn = button("${if (selectedSubtitleTrack == track.index) "✓ " else ""}${track.label} · ${track.languageLabel}") {
-                        selectedSubtitleTrack = track.index
-                        subButtons.forEach { (t, b) -> b.text = "${if (selectedSubtitleTrack == t.index) "✓ " else ""}${t.label} · ${t.languageLabel}" }
-                    }
-                    subButtons += track to btn
-                    panel.addView(btn)
-                }
-            }
-            panel.addView(divider())
             var selectedVoiceName = job.voiceName ?: getSharedPreferences("preparation", MODE_PRIVATE).getString("voiceName", null)
             if (availableVoices.isNotEmpty()) {
-                panel.addView(label("Offline English voice for this film:", 13f, muted))
+                panel.addView(label("Offline English voice for this film:", 13f, ink, true))
                 val voiceNames = availableVoices.map { it.label }.toTypedArray()
                 val initialVoiceIdx = availableVoices.indexOfFirst { it.name == selectedVoiceName }.coerceAtLeast(0)
                 selectedVoiceName = availableVoices[initialVoiceIdx].name
@@ -617,6 +689,68 @@ class MainActivity : ComponentActivity() {
             panel.addView(button("Play short voice sample") {
                 lifecycleScope.launch { guarded { OfflineVoice.playSample(this@MainActivity, selectedVoiceName) } }
             })
+
+            // Advanced settings accordion
+            var offsetMs = job.subtitleOffsetMs
+            fun formatOffsetSummary(offset: Long): String {
+                val previewSuffix = if (existingCues.isNotEmpty()) {
+                    val shifted = Subtitles.applyOffset(existingCues.take(1), offset).first()
+                    " · First cue: ${Subtitles.formatClock(shifted.startMs)} → ${Subtitles.formatClock(shifted.endMs)}"
+                } else ""
+                return "Subtitle timing offset: ${offset} ms$previewSuffix"
+            }
+            val advancedContainer = column().apply { visibility = View.GONE; setPadding(0, dp(6), 0, 0) }
+            val advancedToggle = button("▼ Show advanced settings (tracks & timing)") {}
+            advancedToggle.setOnClickListener {
+                val isShown = advancedContainer.visibility == View.VISIBLE
+                advancedContainer.visibility = if (isShown) View.GONE else View.VISIBLE
+                advancedToggle.text = if (isShown) "▼ Show advanced settings (tracks & timing)" else "▲ Hide advanced settings"
+            }
+            panel.addView(advancedToggle)
+
+            advancedContainer.addView(divider())
+            val offsetLabel = label(formatOffsetSummary(offsetMs), 13f, ink, true)
+            advancedContainer.addView(offsetLabel)
+
+            val offsetRow1 = row().apply { layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) } }
+            offsetRow1.addView(button("−500 ms") { offsetMs -= 500L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(2) })
+            offsetRow1.addView(button("−250 ms") { offsetMs -= 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(2); rightMargin = dp(2) })
+            offsetRow1.addView(button("Reset (0 ms)") { offsetMs = 0L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(2) })
+            equalizeRowHeights(offsetRow1)
+            advancedContainer.addView(offsetRow1)
+
+            val offsetRow2 = row().apply { layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) } }
+            offsetRow2.addView(button("+250 ms") { offsetMs += 250L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(2) })
+            offsetRow2.addView(button("+500 ms") { offsetMs += 500L; offsetLabel.text = formatOffsetSummary(offsetMs) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(2) })
+            equalizeRowHeights(offsetRow2)
+            advancedContainer.addView(offsetRow2)
+
+            var selectedAudioTrack = if (job.audioTrackIndex >= 0) job.audioTrackIndex else rec.audioTrackIndex
+            if (audioTracks.isNotEmpty()) {
+                advancedContainer.addView(label("Audio track (never switches silently):", 13f, muted))
+                val audioButtons = mutableListOf<Pair<MediaTrackInfo, Button>>()
+                audioTracks.forEach { track ->
+                    val btn = button("${if (selectedAudioTrack == track.index) "✓ " else ""}${track.label} · ${track.languageLabel}") {
+                        selectedAudioTrack = track.index
+                        audioButtons.forEach { (t, b) -> b.text = "${if (selectedAudioTrack == t.index) "✓ " else ""}${t.label} · ${t.languageLabel}" }
+                    }
+                    audioButtons += track to btn
+                    advancedContainer.addView(btn)
+                }
+            }
+            var selectedSubtitleTrack = if (job.subtitleTrackIndex >= 0) job.subtitleTrackIndex else rec.subtitleTrackIndex
+            if (subTracks.isNotEmpty() && job.subtitleUri == null) {
+                advancedContainer.addView(label("Embedded subtitle track:", 13f, muted))
+                val subButtons = mutableListOf<Pair<MediaTrackInfo, Button>>()
+                subTracks.forEach { track ->
+                    val btn = button("${if (selectedSubtitleTrack == track.index) "✓ " else ""}${track.label} · ${track.languageLabel}") {
+                        selectedSubtitleTrack = track.index
+                        subButtons.forEach { (t, b) -> b.text = "${if (selectedSubtitleTrack == t.index) "✓ " else ""}${t.label} · ${t.languageLabel}" }
+                    }
+                    subButtons += track to btn
+                    advancedContainer.addView(btn)
+                }
+            }
             val names = arrayOf(
                 "English subtitles · lightest",
                 "Hindi subtitles",
@@ -636,24 +770,26 @@ class MainActivity : ComponentActivity() {
                 rec.path == RecommendedPath.TRANSLATED_SUBTITLES -> listOf("en", "hi", "ur", "ta").indexOf(rec.languageCode).coerceAtLeast(1)
                 else -> 4 + listOf("hi", "ur", "ta").indexOf(rec.languageCode).coerceAtLeast(0)
             }
-            panel.addView(label("Preparation mode & source language:", 13f, muted))
-            panel.addView(styledSpinner(names, selection) { pos ->
+            advancedContainer.addView(label("Preparation mode & source language:", 13f, muted))
+            advancedContainer.addView(styledSpinner(names, selection) { pos ->
                 selection = pos
                 if (pos in 0..3 && job.subtitleUri == null) {
                     val lang = listOf("en", "hi", "ur", "ta")[pos]
                     subTracks.firstOrNull { it.languageCode == lang }?.let { selectedSubtitleTrack = it.index }
                 }
             })
+            panel.addView(advancedContainer)
+
             val dialogScroll = ScrollView(this@MainActivity).apply { addView(panel) }
             AlertDialog.Builder(this@MainActivity).setTitle("Choose source & prepare English")
                 .setView(dialogScroll)
                 .setNegativeButton("Cancel", null)
-                .setNeutralButton("Preview 60s") { _, _ -> lifecycleScope.launch { guarded {
+                .setNeutralButton("Preview 60s Scene") { _, _ -> lifecycleScope.launch { guarded {
                     checkIdle()
                     saveSourceSelection(job, selection, rec, selectedAudioTrack, selectedSubtitleTrack, offsetMs, selectedVoiceName, state = job.state)
                     previewDialog(app.jobs.get(job.id) ?: job)
                 } } }
-                .setPositiveButton("Prepare") { _, _ -> lifecycleScope.launch { guarded {
+                .setPositiveButton("Prepare Full Film") { _, _ -> lifecycleScope.launch { guarded {
                     checkIdle()
                     saveSourceSelection(job, selection, rec, selectedAudioTrack, selectedSubtitleTrack, offsetMs, selectedVoiceName, state = "new")
                     startTask(PreparationService.PREPARE, job.id)
@@ -765,7 +901,38 @@ class MainActivity : ComponentActivity() {
             songBtn = button("Song ranges (${preservedRanges.size})") { songRangeDialog(job, ::refreshCounts) }
             container.addTwoColumnRow(pronBtn, songBtn)
 
-            var warningsOnly = false
+            var filterMode = "all"
+            val warningCount = allCues.count { it.hasTimingWarning(job.subtitleOffsetMs) }
+            val subCount = allCues.count { it.subtitlesOnly }
+            val filterRow = row().apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(6); bottomMargin = dp(4) }
+            }
+            lateinit var filterAllBtn: Button
+            lateinit var filterWarnBtn: Button
+            lateinit var filterSubBtn: Button
+            lateinit var populateCues: (String) -> Unit
+            fun updateFilter(mode: String) {
+                filterMode = mode
+                filterAllBtn.styleAsTab(filterMode == "all")
+                filterWarnBtn.styleAsTab(filterMode == "warnings")
+                filterSubBtn.styleAsTab(filterMode == "subtitles")
+                populateCues(searchInput.text?.toString().orEmpty())
+            }
+            filterAllBtn = button("All (${allCues.size})") { updateFilter("all") }
+            filterWarnBtn = button("⚠ Warnings ($warningCount)") { updateFilter("warnings") }
+            filterSubBtn = button("Subtitles only ($subCount)") { updateFilter("subtitles") }
+            filterAllBtn.styleAsTab(true)
+            filterWarnBtn.styleAsTab(false)
+            filterSubBtn.styleAsTab(false)
+            filterRow.addView(filterAllBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(2) })
+            filterRow.addView(filterWarnBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(2); rightMargin = dp(2) })
+            filterRow.addView(filterSubBtn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(2) })
+            equalizeRowHeights(filterRow)
+            container.addView(filterRow)
+
             val emptyLabel = label("No matching dialogue cues. Prepare a scene preview or dub first.", 14f, muted).apply {
                 setPadding(0, dp(14), 0, dp(8))
             }
@@ -777,7 +944,6 @@ class MainActivity : ComponentActivity() {
                     topMargin = dp(8)
                 }
             }
-            lateinit var populateCues: (String) -> Unit
             val cueAdapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                     val btn = parent.context.button("") {}.apply {
@@ -790,7 +956,10 @@ class MainActivity : ComponentActivity() {
                     val cue = displayedCues[position]
                     val start = cue.effectiveStartMs(job.subtitleOffsetMs)
                     val end = cue.effectiveEndMs(job.subtitleOffsetMs)
-                    val warn = if (cue.hasTimingWarning(job.subtitleOffsetMs)) " · ⚠ Exceeds window" else ""
+                    val warn = if (cue.hasTimingWarning(job.subtitleOffsetMs)) {
+                        val overflow = maxOf(0L, cue.spokenEndMs - cue.effectiveEndMs(job.subtitleOffsetMs))
+                        if (overflow > 0) " · ⚠ +${overflow}ms overflow" else " · ⚠ Timing shift"
+                    } else ""
                     val subOnlyTag = if (cue.subtitlesOnly) " · [Subtitles only]" else ""
                     val orig = cue.originalTranscript(job.mode)?.let { "\nOriginal: $it" }.orEmpty()
                     val text = "#${cue.index + 1} (${Subtitles.formatClock(start)}–${Subtitles.formatClock(end)})$warn$subOnlyTag\n${cue.effectiveEnglish()}$orig"
@@ -812,20 +981,14 @@ class MainActivity : ComponentActivity() {
             cueRecycler.adapter = cueAdapter
             populateCues = { query: String ->
                 val searched = Subtitles.searchCues(allCues, query, job.mode, job.subtitleOffsetMs)
-                displayedCues = if (warningsOnly) searched.filter { it.hasTimingWarning(job.subtitleOffsetMs) } else searched
+                displayedCues = when (filterMode) {
+                    "warnings" -> searched.filter { it.hasTimingWarning(job.subtitleOffsetMs) }
+                    "subtitles" -> searched.filter { it.subtitlesOnly }
+                    else -> searched
+                }
                 emptyLabel.visibility = if (displayedCues.isEmpty()) View.VISIBLE else View.GONE
                 cueRecycler.visibility = if (displayedCues.isEmpty()) View.GONE else View.VISIBLE
                 cueAdapter.notifyDataSetChanged()
-            }
-            val warningCount = allCues.count { it.hasTimingWarning(job.subtitleOffsetMs) }
-            if (warningCount > 0) {
-                val filterBtn = button("Filter: Timing warnings ($warningCount)") {}
-                filterBtn.setOnClickListener {
-                    warningsOnly = !warningsOnly
-                    filterBtn.text = if (warningsOnly) "✓ Showing timing warnings ($warningCount)" else "Filter: Timing warnings ($warningCount)"
-                    populateCues(searchInput.text?.toString().orEmpty())
-                }
-                container.addView(filterBtn)
             }
             populateCues("")
             searchInput.addTextChangedListener(object : TextWatcher {
@@ -864,9 +1027,19 @@ class MainActivity : ComponentActivity() {
         box.addView(label("Effective start / end (ms or mm:ss):", 13f, mint, true))
         box.addTwoColumnRow(startInput, endInput)
         box.addView(subOnlySwitch)
-        box.addView(button("Play this cue in player") {
+        val auditionBtn = button("🔊 Audition line") {
+            lifecycleScope.launch { guarded {
+                val text = englishInput.text.toString().trim()
+                if (text.isEmpty()) { toast("Dialogue text cannot be empty."); return@guarded }
+                toast("Auditioning line…")
+                val voice = job.voiceName ?: getSharedPreferences("preparation", MODE_PRIVATE).getString("voiceName", null)
+                OfflineVoice.create(this@MainActivity, voice).use { it.speakSample(text) }
+            } }
+        }
+        val playBtn = button("Play in player") {
             startActivity(Intent(this, PlayerActivity::class.java).putExtra("id", job.id).putExtra("startMs", cue.effectiveStartMs(job.subtitleOffsetMs)))
-        })
+        }
+        box.addTwoColumnRow(auditionBtn, playBtn)
         AlertDialog.Builder(this).setTitle("Edit line #${cue.index + 1}")
             .setView(scrollable(box))
             .setNegativeButton("Cancel", null)

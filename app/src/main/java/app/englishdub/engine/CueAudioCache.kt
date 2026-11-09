@@ -144,8 +144,8 @@ class CueAudioCache(
 
         /** Open a reusable speech clip (compressed .pcm.gz or raw .pcm) for incremental decoding. */
         fun openPcmStream(file: File): InputStream =
-            if (file.name.endsWith(".gz")) BufferedInputStream(GZIPInputStream(file.inputStream()))
-            else BufferedInputStream(file.inputStream())
+            if (file.name.endsWith(".gz")) BufferedInputStream(GZIPInputStream(BufferedInputStream(file.inputStream(), 32768)), 32768)
+            else BufferedInputStream(file.inputStream(), 32768)
     }
 }
 

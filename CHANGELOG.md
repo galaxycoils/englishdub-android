@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0
+
+- Add Picture-in-Picture (PiP) multitasking support in `PlayerActivity` with automatic transition on home gesture/leaving app and sleek overlay hiding in mini-window mode.
+- Add player double-tap gesture controls to seek ±10 seconds with animated on-screen HUD pill ("« 10s" / "10s »").
+- Add live in-player subtitle timing synchronization dialog with one-tap offset presets (`−250 ms`, `Reset (0 ms)`, `+250 ms`) that realigns speech and captions on the fly and saves adjustments to the database.
+- Optimize cue lookups to O(log N) binary search (`Subtitles.findCueAt` and `Subtitles.findSpokenCueAt`), eliminating linear scans during 10 Hz playback clock polling.
+- Optimize timeline audio I/O with buffered stream reads (`BufferedInputStream` 32 KiB chunking before `GZIPInputStream`) and selective silence zero-filling in `AacTimeline`, minimizing syscall overhead during full-film dub assembly.
+- Add friendly first-run onboarding guide in `LibraryAdapter` with a one-tap "▶ Try 10-Second Sample Demo" that self-synthesizes an offline dub demo without requiring user video files.
+- Streamline "Choose source & prepare English" dialog with Hero recommendation banner, direct English voice selection & sample listening, and collapsible Advanced Settings accordion with offset adjustment buttons.
+- Upgrade dialogue review and cue editing with filter chips (`All`, `⚠ Warnings`, `Subtitles only`), exact timing overflow metrics (`+XX ms overflow`), and "🔊 Audition line" button that speaks edited dialogue via the offline synthesizer.
+- Add one-tap "Free temporary cache space" button in Storage settings to clear previews and LRU speech clips without touching completed movie dubs.
+
 ## 0.3.1 experimental preview
 
 - Index speech-cache sizes and LRU order once per stage; trim after active work ends and avoid repeated protected-set and checkpoint-list copies.
