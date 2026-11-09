@@ -63,7 +63,14 @@ jobs:
         run: |
           set -euo pipefail
           sudo chmod 666 /dev/kvm
-          echo no | avdmanager create avd --name ci --package 'system-images;android-35;google_apis;x86_64' --force
+          # Keep command-line tools and emulator on the same explicit AVD root.
+          export ANDROID_USER_HOME="$RUNNER_TEMP/englishdub-android"
+          export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd --path "$ANDROID_AVD_HOME/ci.avd" --name ci --package 'system-images;android-35;google_apis;x86_64' --force
+          test -f "$ANDROID_AVD_HOME/ci.avd/config.ini"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | rg -x ci
           mkdir -p qa-artifacts/ci
           "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > qa-artifacts/ci/emulator.log 2>&1 &
           trap 'adb -s emulator-5554 emu kill || true' EXIT
