@@ -70,7 +70,7 @@ jobs:
           mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd --path "$ANDROID_AVD_HOME/ci.avd" --name ci --package 'system-images;android-35;google_apis;x86_64' --force
           test -f "$ANDROID_AVD_HOME/ci.avd/config.ini"
-          "$ANDROID_HOME/emulator/emulator" -list-avds | rg -x ci
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -x ci
           mkdir -p qa-artifacts/ci
           "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > qa-artifacts/ci/emulator.log 2>&1 &
           trap 'adb -s emulator-5554 emu kill || true' EXIT
@@ -81,8 +81,8 @@ jobs:
           adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           tests='app.englishdub.SubtitleCompatibilityTest,app.englishdub.OfflinePipelineTest#englishAudioSkipsDubbingPreparation,app.englishdub.OfflinePipelineTest#migrationPreservesVersionOneLibrary,app.englishdub.OfflinePipelineTest#migrationPreservesVersionTwoLibraryAndPersistsV3Entities,app.englishdub.OfflinePipelineTest#sourceIdentityIsStableAcrossDescriptorReopens,app.englishdub.OfflinePipelineTest#aacTrackPreservesSilenceAndSpeechTimes,app.englishdub.OfflinePipelineTest#hardwareProfileDetectsDeviceAndAppliesOptimalSetup'
           timeout 300 adb -s emulator-5554 shell am instrument -r -w -e class "$tests" app.englishdub.test/androidx.test.runner.AndroidJUnitRunner | tee qa-artifacts/ci/instrumentation.txt
-          rg -q '^OK \(7 tests\)' qa-artifacts/ci/instrumentation.txt
-          ! rg -q 'FAILURES|INSTRUMENTATION_FAILED|INSTRUMENTATION_ABORTED|AssumptionFailure|INSTRUMENTATION_STATUS_CODE: -[34]' qa-artifacts/ci/instrumentation.txt
+          grep -Fq 'OK (7 tests)' qa-artifacts/ci/instrumentation.txt
+          ! grep -Eq 'FAILURES|INSTRUMENTATION_FAILED|INSTRUMENTATION_ABORTED|AssumptionFailure|INSTRUMENTATION_STATUS_CODE: -[34]' qa-artifacts/ci/instrumentation.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
