@@ -1,0 +1,40 @@
+name: Release APKs
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-apks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Android tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Build Preview and Release APKs
+        run: ./gradlew --no-daemon :app:assemblePreview :app:assembleRelease
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/preview/app-preview.apk dist/EnglishDub-1.0.0-preview-arm64.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk dist/EnglishDub-1.0.0-release-unsigned-arm64.apk
+          cd dist
+          sha256sum EnglishDub-1.0.0-*.apk > SHA256SUMS.txt
+      - name: Upload APKs to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload v1.0.0 dist/* --clobber
