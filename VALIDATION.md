@@ -1,4 +1,6 @@
-# Validation — 0.3.0 experimental preview
+# Validation — 0.3.1 experimental preview
+
+Current release: [0.3.1 validation](docs/validation/RELEASE-0.3.1.md) and root `verification.json`. The table below preserves the earlier 0.3.0 emulator/build evidence; its runtime results and hashes do not describe 0.3.1.
 
 Current optimization changes (2026-11-09) pass 52 JVM tests, lint with zero errors / 67 warnings, debug/test packaging, and unsigned release packaging. No target was connected for this change, so the Android runtime results and APK hashes below describe the earlier build. See [optimization validation](docs/validation/OPTIMIZATION-2026-11-09.md). The 36-case evaluation is a synthetic text/pipeline regression, not measured language accuracy; see the corrected [evidence boundary](docs/evaluation/EVALUATION-SET-0.3.md#evidence-boundary).
 
@@ -17,7 +19,7 @@ The 0.3.0 release delivers track inspection & source recommendations, 60-second 
 | Physical-phone efficiency and synchronization | Unverified |
 | Hindi/Urdu/Tamil human bilingual sign-off | Pending (`bilingualReviewed: false` in `docs/evaluation/evaluation-manifest-0.3.json`) |
 
-See the [full Mac report](docs/validation/MAC-2026-11-07.md) and [0.3 evaluation set](docs/evaluation/EVALUATION-SET-0.3.md) for the target, raw sample counts, before/after reproduction, fixture repair, test durations, and remaining acceptance work. Exact artifact hashes are in `verification.json`.
+See the [full Mac report](docs/validation/MAC-2026-11-07.md) and [0.3 evaluation set](docs/evaluation/EVALUATION-SET-0.3.md) for the target, raw sample counts, before/after reproduction, fixture repair, test durations, and remaining acceptance work. Historical artifact hashes are preserved in `docs/validation/verification-0.3.0.json`.
 
 The historical API 26 software x86 sync failure (886 ms) remains in
 [0.2.0 validation](docs/validation/VALIDATION-0.2.0.md). The accelerated baseline

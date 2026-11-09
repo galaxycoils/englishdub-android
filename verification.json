@@ -1,131 +1,47 @@
 {
-  "version": "0.3.0-preview",
-  "source_ref": "v0.3.0-preview",
-  "date": "2026-11-07",
-  "android_qa_workflow": "Autonom 0.36.1 sessions/screens/journal plus Test Android Apps emulator QA procedures",
+  "version": "0.3.1-preview",
+  "source_ref": "v0.3.1-preview",
+  "runtime_source_commit": "1ec90899374985cac94ebaa91f0b6e2a43ece2d8",
+  "date": "2026-11-09",
+  "github": {
+    "approved_repository": "galaxycoils/englishdub-android",
+    "url": "https://github.com/galaxycoils/englishdub-android"
+  },
   "preview": {
     "package": "app.englishdub.preview",
-    "version_code": 4,
+    "version_code": 5,
     "min_sdk": 26,
     "target_sdk": 36,
     "abi": [
       "arm64-v8a"
     ],
     "bytes": 20314534,
-    "sha256": "7d6860373565673e4e6ee2cac8adfa00352be5fd0c14255cd013070510e8b720",
+    "sha256": "e344a271a17aa54aa294b7cc6a83c8282238211fbc739c33a37563f3a1e3419c",
     "release_unsigned_bytes": 20306326,
-    "release_unsigned_sha256": "fa18ecdcb61e61229780ff7197ca8df6a8012d509266dae40701e26a33d2f036",
-    "debug_bytes": 26874616,
-    "debug_sha256": "0b8d5b839c9e8645090038deab157c70b52b58b25cdf83f3367f01367735d885",
+    "release_unsigned_sha256": "f2f8176582a61d5923888241f29d5f75af47f734409fe8e3284c5d5a433cf05b",
     "signature_v2": true,
     "zip_alignment_16kb": true,
-    "all_native_load_alignment_16kb": true,
-    "same_signer_as_0_2_0_cloud_preview": false,
     "signer_certificate_sha256": "7c72a527b19dc406429ad68096fde910be946de674c334960306f6fe1ee93283",
-    "signing": "new Mac local debug signer; not a production key",
-    "ui_smoke": "installed and library rendered on same API35 ARM64 emulator; separate preview package"
+    "signing": "Mac local debug signer; same certificate as 0.3.0 preview; not a production key"
   },
   "jvm": {
-    "tests": 50,
+    "tests": 52,
     "failures": 0,
-    "errors": 0
+    "errors": 0,
+    "skipped": 0
   },
   "lint": {
     "errors": 0,
-    "warnings": 56
+    "warnings": 67
   },
-  "android_target": {
-    "serial": "emulator-5554",
-    "avd": "EnglishDub_API35_ARM64",
-    "api": 35,
-    "os": "Android 15",
-    "abi": "arm64-v8a",
-    "emulated_ram_mib": 2560,
-    "acceleration": "Apple Hypervisor.Framework",
-    "build": "debug with optimized native kernels",
-    "tts": "official eSpeak NG 1.52.0",
-    "network": "airplane mode; Wi-Fi and data disabled"
-  },
-  "android_core": {
-    "tests": 11,
-    "passed": 11,
-    "failed": 0,
-    "skipped": 0,
-    "duration_seconds": 9.082,
-    "includes_full_native_inference": true,
-    "includes_0_3_preview_and_rebuild": true,
-    "log": "final/core.txt"
-  },
-  "playback_sync": {
-    "status": "passed on accelerated ARM64 emulator",
-    "target_ms": 150,
-    "maximum_sampled_stable_drift_ms": 53,
-    "tests": 4,
-    "passed": 4,
-    "failed": 0,
-    "skipped": 0,
-    "duration_seconds": 15.452,
-    "samples": {
-      "sync-overflow.csv": {
-        "stable_samples": 0,
-        "max_stable_drift_ms": null,
-        "transition_samples": 64
-      },
-      "sync-buffering.csv": {
-        "stable_samples": 12,
-        "max_stable_drift_ms": 41,
-        "transition_samples": 31
-      },
-      "sync-controls.csv": {
-        "stable_samples": 48,
-        "max_stable_drift_ms": 53,
-        "transition_samples": 69
-      },
-      "sync-samples.csv": {
-        "stable_samples": 8,
-        "max_stable_drift_ms": 26,
-        "transition_samples": 5
-      }
-    },
-    "notes": "Original strict test unchanged. Transition/event rows retained separately. Trailing audio is expected to advance beyond the final video frame.",
-    "log": "final/playback.txt"
-  },
-  "reproduced_bug": {
-    "baseline": "cb0f341eb96dfd3996a7013d059c81695159ce9f",
-    "recovery_tests": 3,
-    "baseline_passed": 1,
-    "baseline_failed": 2,
-    "failure": "deferred synchronization pause callbacks erase playback intent; repeated-seek and trailing-dub scenarios hang",
-    "fix": "queue internal play state acknowledgements until their callbacks arrive"
-  },
-  "full_android_whisper_transcription": {
-    "status": "passed English JFK direct-buffer recognition smoke test",
-    "model_sha256": "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
-    "notes": "Exact base Q5_1 model; checks country and americans. Not source-language quality or preparation throughput."
-  },
-  "android_ui": {
-    "status": "library/setup/library/player captured; offline voice check exercised",
-    "session_id": "s_a4dae4a4b2",
-    "crash_buffer_bytes": 0,
-    "pss_kib_snapshots": {
-      "library": 61944,
-      "player_open_ended": 89666
-    },
-    "notes": "Diagnostic snapshots only, not peaks or phone performance acceptance. Player screenshot is at end of six-second fixture."
-  },
-  "physical_phone_targets": "unverified: synchronization, preparation/playback peak memory, battery, temperature, throughput",
-  "language_quality": "Hindi/Urdu/Tamil end-to-end and bilingual reference review remain unverified",
-  "historical_0_2_0": {
-    "report": "docs/validation/VALIDATION-0.2.0.md",
-    "verification": "docs/validation/verification-0.2.0.json",
-    "software_x86_sync_failure_ms": 886,
-    "rerun_on_same_environment": false,
-    "notes": "Original accelerated ARM64 baseline also passes strict test (11 ms); do not relabel historical software x86 failure as passed."
-  },
-  "github": {
-    "approved_repository": "galaxycoils/englishdub-android",
-    "url": "https://github.com/galaxycoils/englishdub-android",
-    "status": "published with full restored history"
-  },
-  "runtime_source_commit": "5cb810e7a9600de45f6505513c552992d282aeeb"
+  "local_builds": [
+    "debug",
+    "debugAndroidTest",
+    "preview",
+    "release_unsigned"
+  ],
+  "android_runtime": "Not rerun locally for 0.3.1: no connected target. CI platform job is separate; see GitHub Actions results.",
+  "historical_android_evidence": "docs/validation/verification-0.3.0.json (earlier build; not a current-device pass)",
+  "physical_phone_targets": "Unverified: synchronization, peak memory, battery, temperature, throughput",
+  "language_quality": "Experimental. 36 text fixtures use reference translations and synthetic WAVs; actual Hindi/Urdu/Tamil recordings and bilingual review are pending."
 }
