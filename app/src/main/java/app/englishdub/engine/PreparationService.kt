@@ -145,6 +145,11 @@ class PreparationService : Service() {
                     }
                 }
             } finally {
+                // All encoding has stopped; active clips no longer need eviction protection.
+                runCatching {
+                    val prefs = getSharedPreferences("preparation", MODE_PRIVATE)
+                    CueAudioCache.reusable(app.speechCacheDir, "cleanup", HardwareProfile.resolveSpeechCacheBytes(this@PreparationService, prefs)).evictIfNeeded()
+                }
                 whisper = null
                 activeChargingOnly = false
                 if (lock.isHeld) lock.release()
@@ -213,17 +218,20 @@ class PreparationService : Service() {
             val langName = OfflineTranslation.languages[code] ?: code
             val baseProgress = 85 + (index * 10 / plan.translationPacksToDownload.size.coerceAtLeast(1))
             publish(id, "Downloading $langName translation pack…", baseProgress)
-            runCatching { withTimeout(25_000) { OfflineTranslation.download(code) } }
+            // Pack failure (including cancellation) must not become a successful setup.
+            withTimeout(25_000) { OfflineTranslation.download(code) }
         }
 
+        val updatedTrans = OfflineTranslation.installed()
+        require(plan.translationPacksToDownload.all { it in updatedTrans }) {
+            "Offline setup is incomplete. Retry setup to download the missing translation packs."
+        }
         HardwareProfile.applyOptimalSettings(
             prefs = prefs,
             profile = profile,
-            vadVerified = app.models.vadReady,
             selectedVoiceName = bestVoice,
         )
 
-        val updatedTrans = runCatching { OfflineTranslation.installed() }.getOrDefault(installedTrans)
         app.jobs.all().filter { it.state == "missing_pack" }.forEach { job ->
             val packReady = when {
                 job.mode == "speech" -> app.models.ready
@@ -420,7 +428,7 @@ class PreparationService : Service() {
             app.jobs.save(job)
         }
         val startedAt = SystemClock.elapsedRealtime()
-        var cues = app.jobs.cues(id)
+        var cues = app.jobs.cues(id).toMutableList()
         if (!rebuildOnly && job.mode == "speech" && job.decodedUntilMs < duration - 100) {
             val threads = HardwareProfile.resolveInferenceThreads(this, prefs)
             val engine = WhisperBridge(app.models.speechFile.path, threads, if (useVad) app.models.vadFile.path else null)
@@ -439,13 +447,13 @@ class PreparationService : Service() {
                         SavedCue(id, cues.size + index, cue.startMs, cue.endMs, "", english = cue.text, transcriptAvailable = false)
                     }
                     app.database.withTransaction { app.jobs.saveCues(saved); app.jobs.decoded(id, next) }
-                    cues = cues + saved
+                    cues.addAll(saved)
                 }
             } finally { whisper = null; engine.close() }
         } else if (job.mode != "speech" && cues.isEmpty()) {
             val parsed = subtitleText?.let { Subtitles.parse(it) }
                 ?: AudioTools.embeddedSubtitles(this, media, job.sourceLanguage, job.subtitleTrackIndex)
-            cues = parsed.mapIndexed { index, cue -> SavedCue(id, index, cue.startMs, cue.endMs, cue.text, transcriptAvailable = true) }
+            cues = parsed.mapIndexed { index, cue -> SavedCue(id, index, cue.startMs, cue.endMs, cue.text, transcriptAvailable = true) }.toMutableList()
             app.jobs.saveCues(cues)
         }
         require(cues.isNotEmpty()) { "No dialogue was found. Add readable subtitles or try clearer audio." }
@@ -465,9 +473,9 @@ class PreparationService : Service() {
                 if (current.voiceSignature != voice.identity) {
                     if (previousAudioPath == null) {
                         app.jobs.invalidateVoice(id)
-                        cues = app.jobs.cues(id)
+                        cues = app.jobs.cues(id).toMutableList()
                     } else {
-                        cues = cues.map { it.copy(pcmPath = null, rate = 0, spokenStartMs = 0, spokenEndMs = 0) }
+                        cues = cues.map { it.copy(pcmPath = null, rate = 0, spokenStartMs = 0, spokenEndMs = 0) }.toMutableList()
                     }
                 }
                 val cache = CueAudioCache.reusable(app.speechCacheDir, voice.identity, HardwareProfile.resolveSpeechCacheBytes(this, prefs))
@@ -486,16 +494,11 @@ class PreparationService : Service() {
                     if (previousAudioPath == null) app.jobs.saveCue(updatedCue)
                     publish(id, "Generating English voice · ${index + 1}/${cues.size}", 45 + (index + 1) * 40 / cues.size, true)
                 }
-                cues = pass.cues
+                cues = pass.cues.toMutableList()
                 warnings = pass.warnings
                 regeneratedLegacy = pass.regeneratedLegacyClips
             }
         } finally { translator?.close() }
-        val partial = File(directory, "english.partial.m4a")
-        val completed = File(directory, "english.m4a")
-        DialoguePipeline.commitTimeline(cues, duration, partial, completed) { timelineCues, dur, out ->
-            AacTimeline.encode(timelineCues, dur, out) { checkEnvironment(); publish(id, "Saving English dub", 85 + it * 15 / 100, true) }
-        }
         val timelineSig = PreparationIdentity.timeline(cues, job.subtitleOffsetMs, pronunciations, preservedRanges, voiceId, duration)
         val legacyNote = if (regeneratedLegacy) " Missing reusable speech clips from an earlier dub were regenerated." else ""
         val readyMessage = if (warnings == 0) {
@@ -503,10 +506,16 @@ class PreparationService : Service() {
         } else {
             "English dub ready. $warnings lines exceed their original timing; complete speech is preserved.$legacyNote"
         }
-        app.database.withTransaction {
-            app.jobs.saveCues(cues)
-            app.jobs.get(id)?.let {
-                app.jobs.save(it.copy(
+        DialoguePipeline.publishTimeline(
+            cues, duration, directory,
+            encode = { timelineCues, dur, out ->
+                AacTimeline.encode(timelineCues, dur, out) { checkEnvironment(); publish(id, "Saving English dub", 85 + it * 15 / 100, true) }
+            },
+        ) { completed ->
+            app.database.withTransaction {
+                app.jobs.saveCues(cues)
+                val current = app.jobs.get(id) ?: error("Video was removed.")
+                app.jobs.save(current.copy(
                     state = "ready",
                     progress = 100,
                     audioPath = completed.path,
@@ -516,6 +525,7 @@ class PreparationService : Service() {
                 ))
             }
         }
+        ResourcePolicy.removeUnusedDubs(directory, app.jobs.get(id)?.audioPath)
         clearScratch(directory)
     }
 

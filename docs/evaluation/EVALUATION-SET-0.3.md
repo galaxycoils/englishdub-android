@@ -15,16 +15,13 @@ Each supported source language (**Hindi `hi`**, **Urdu `ur`**, **Tamil `ta`**) i
 5. **Overlapping speakers (`overlapping_speakers`):** Rapid interruptions and two-speaker turns with tight cue windows.
 6. **English code-switching (`english_code_switching`):** Mixed Hindi/Urdu/Tamil + English terms (`schedule`, `confirm`, `report`, `office`, `flight`, `project`, `ticket`).
 
-## 0.2.1 vs 0.3.0 comparison summary
+## Evidence boundary
 
-| Metric across 36 clips (12 `hi`, 12 `ur`, 12 `ta`) | 0.2.1 baseline | 0.3.0 with user review/controls | Notes |
-| --- | --- | --- | --- |
-| Underlying Whisper / ML Kit model weights | Unchanged (`ggml-base-q5_1` / ML Kit 17.0.3) | Unchanged (`ggml-base-q5_1` / ML Kit 17.0.3) | Raw unedited model output is identical |
-| Missing meaning (quiet / loud-music speech recognition) | 9 / 36 | 6 / 36 (editable in Dialogue Review) | Quiet/music clips without subtitles still require manual line correction |
-| Incorrect spoken names / places | 6 / 36 | 0 / 36 after film pronunciation entries | Pronunciation overrides fix spoken TTS without altering caption spelling |
-| Invented speech during musical numbers | 3 / 36 | 0 / 36 with manual song ranges | Manual preserved-audio ranges keep original soundtrack and suppress TTS |
-| Timing overflow (>150 ms beyond cue window) | 9 / 36 | Flagged in searchable Dialogue Review; 1.25× speed cap preserved | Complete words preserved; overflow never silently truncates speech |
-| False original-language transcript in speech mode | Present (`cue.text` copied English output) | Eliminated (`transcriptAvailable = false`) | Speech translation never claims its English output is a source transcript |
+These are 36 **text fixture cases**, supplied as SRT and manifest entries. No corresponding Hindi, Urdu, or Tamil audio recordings or captured model outputs are included. The JVM test supplies reference translations and generated WAV durations; its two passes exercise the current pipeline with different controls, rather than executing the historical 0.2.1 application.
+
+The `baseline021` and `release030` metrics in the manifest are fixture scenarios, not measured recognition, translation, pronunciation, or human-listening results. Earlier numerical comparisons in this document must not be treated as observed quality improvements. The fixtures verify caption preservation, pronunciation replacement, song-range suppression, reuse, and timing warnings.
+
+A real quality comparison still requires licensed audio with provenance and hashes, actual baseline/candidate engine outputs, device/model/voice identities, and bilingual listening review. Report automatic output separately from manual corrections. Do not enable VAD by default based on these fixtures.
 
 ## Redistributable corpus files
 
@@ -35,5 +32,5 @@ Each supported source language (**Hindi `hi`**, **Urdu `ur`**, **Tamil `ta`**) i
 
 ## Reproducing the evaluation check
 
-Automated manifest, SRT parsing, and 0.2.1 vs 0.3.0 `DialoguePipeline` execution checks run in `./gradlew :app:testDebugUnitTest` (`Release03PipelineTest`). Bilingual reviewers should record per-clip human sign-off by updating `bilingualReviewed` in `docs/evaluation/evaluation-manifest-0.3.json` after listening to physical-phone output.
+Automated manifest, SRT parsing, and 0.2.1 vs 0.3.0 `DialoguePipeline` execution checks run in `./gradlew :app:testDebugUnitTest` (`Release03PipelineTest`). Bilingual reviewers should record per-clip human sign-off by updating `bilingualReviewed` in `docs/evaluation/evaluation-manifest-0.3.json` after evaluating actual recorded inputs and captured physical-phone output. The current regression intentionally requires every fixture to remain unreviewed; move real review results into a separate results artifact and update that assertion before recording sign-off.
 

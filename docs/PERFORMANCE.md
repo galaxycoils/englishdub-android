@@ -55,3 +55,9 @@ In that historical software-emulator run, full base-model Android transcription 
 Use an ARM64 budget phone (3–4 GB RAM) and a midrange phone (6–8 GB), the same local media/voice, airplane mode after setup, fixed brightness/volume, and comparable battery/temperature. Record the commit, APK hash, build, device/API, model hashes, duration and run count. Capture library idle, recognition, synthesis, encoding and actual playback separately. Run at least three comparable baseline/candidate measurements; retain raw traces and report variability. Test final speech overflow, seek/speed changes and interruption independently of throughput.
 
 See [testing](TESTING.md) for commands and [validation](../VALIDATION.md) for pass/fail/blocked results. No result here establishes compatibility with every movie, codec or streaming service.
+
+## 2026-11-09 implementation changes
+
+Speech-cache instances now index audio/marker sizes and LRU order once, then update them incrementally. A JVM regression generates 100 distinct clips and reads them again with one total directory enumeration; ending active protection trims assets back to budget. Recognition appends checkpoint cues in place rather than copying the accumulated list on each window. These establish reduced work, not a measured phone speed or battery improvement.
+
+Hardware recommendations and saved thread overrides now match the native one/two-thread ceiling. Auto-setup preserves explicit VAD settings and no longer downloads the optional detector. Hardware video support no longer implies hardware AAC encoding; capability text indicates encoder availability without claiming throughput. Hardware tuning selects 64–384 MiB speech-cache budgets, with 256 MiB as the unset default. Phone benchmarks remain pending.

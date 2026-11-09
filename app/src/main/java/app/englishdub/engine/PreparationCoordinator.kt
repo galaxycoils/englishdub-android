@@ -257,6 +257,29 @@ object DialoguePipeline {
         return CuePassResult(updated, warnings, regeneratedLegacyClips, protectedPaths)
     }
 
+    /** Publish metadata only after a distinct, complete output exists. A crash before
+     * publication leaves the old output usable; recovery removes unreferenced versions. */
+    suspend fun publishTimeline(
+        cues: List<SavedCue>,
+        durationMs: Long,
+        directory: File,
+        encode: suspend (List<SavedCue>, Long, File) -> Unit,
+        publish: suspend (File) -> Unit,
+    ): File {
+        val completed = File(directory, "english-${java.util.UUID.randomUUID()}.m4a")
+        val partial = File(directory, "${completed.name}.partial")
+        commitTimeline(cues, durationMs, partial, completed, encode)
+        try {
+            currentCoroutineContext().ensureActive()
+            // Once publication starts, do not cancel between the database commit and return.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { publish(completed) }
+        } catch (error: Throwable) {
+            completed.delete()
+            throw error
+        }
+        return completed
+    }
+
     /** Encode to a temporary file and commit atomically; failed regeneration preserves the previous playable dub. */
     suspend fun commitTimeline(
         cues: List<SavedCue>,

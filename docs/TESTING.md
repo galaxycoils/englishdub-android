@@ -76,7 +76,7 @@ Targets: complete APK ≤21 MB, playback <250 MB PSS, preparation <800 MB PSS, a
 
 ## Results
 
-See `VALIDATION.md`, `docs/PERFORMANCE.md`, and `verification.json`. Preserve logs, test reports, screenshots, and profiler output with the tested revision. GitHub Actions builds artifacts. See [Mac validation](validation/MAC-2026-11-07.md) for Autonom sessions and [fixture provenance](TEST-FIXTURES.md) for the committed test WAV.
+See `VALIDATION.md`, `docs/PERFORMANCE.md`, and `verification.json`. Preserve logs, test reports, screenshots, and profiler output with the tested revision. GitHub Actions builds artifacts and defines a separate Android 15 x86_64 platform-test job. That job runs seven tests covering subtitle parsing, audio bypass, migrations, source identity, AAC timing, and hardware preferences. It fails on skips or failures; offline TTS/model and dual-player acceptance still require a provisioned target. See [Mac validation](validation/MAC-2026-11-07.md) for Autonom sessions and [fixture provenance](TEST-FIXTURES.md) for the committed test WAV.
 
 ## Mac setup and Autonom
 

@@ -8,7 +8,7 @@ Testing follows the **Test Android Apps** `android-emulator-qa` and `android-per
 ./gradlew :app:testDebugUnitTest :app:lintDebug
 ```
 
-See `docs/TESTING.md` for instrumentation and QA/profiling. CI compiles/packages artifacts; it does not independently run a different test provider.
+See `docs/TESTING.md` for instrumentation and QA/profiling. CI compiles/packages artifacts and defines seven Android platform regressions on an API 35 x86_64 emulator. Offline voice/model and player acceptance remain explicit provisioned-target checks.
 
 Keep inference sequential, buffers bounded, and model lifetimes explicit. Do not weaken source/voice cache invalidation or checkpoint durability to improve benchmarks. Avoid introducing timers on idle screens. Use targeted Room updates for progress.
 

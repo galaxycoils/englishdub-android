@@ -39,3 +39,46 @@ jobs:
             app/build/reports/tests/testDebugUnitTest/**
             app/build/reports/lint-results-debug.*
           retention-days: 14
+  platform-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned tools and Android 15 emulator
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1' 'emulator' 'system-images;android-35;google_apis;x86_64'
+      - name: Build emulator test artifacts
+        run: ./gradlew --no-daemon -Pdub.abi=x86_64 :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Run platform regressions without optional voice or model dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          echo no | avdmanager create avd --name ci --package 'system-images;android-35;google_apis;x86_64' --force
+          mkdir -p qa-artifacts/ci
+          "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > qa-artifacts/ci/emulator.log 2>&1 &
+          trap 'adb -s emulator-5554 emu kill || true' EXIT
+          timeout 240 adb -s emulator-5554 wait-for-device
+          timeout 240 bash -c 'until [[ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d "\r")" == 1 ]]; do sleep 2; done'
+          adb -s emulator-5554 shell input keyevent 82
+          adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+          adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          tests='app.englishdub.SubtitleCompatibilityTest,app.englishdub.OfflinePipelineTest#englishAudioSkipsDubbingPreparation,app.englishdub.OfflinePipelineTest#migrationPreservesVersionOneLibrary,app.englishdub.OfflinePipelineTest#migrationPreservesVersionTwoLibraryAndPersistsV3Entities,app.englishdub.OfflinePipelineTest#sourceIdentityIsStableAcrossDescriptorReopens,app.englishdub.OfflinePipelineTest#aacTrackPreservesSilenceAndSpeechTimes,app.englishdub.OfflinePipelineTest#hardwareProfileDetectsDeviceAndAppliesOptimalSetup'
+          timeout 300 adb -s emulator-5554 shell am instrument -r -w -e class "$tests" app.englishdub.test/androidx.test.runner.AndroidJUnitRunner | tee qa-artifacts/ci/instrumentation.txt
+          rg -q '^OK \(7 tests\)' qa-artifacts/ci/instrumentation.txt
+          ! rg -q 'FAILURES|INSTRUMENTATION_FAILED|INSTRUMENTATION_ABORTED|AssumptionFailure|INSTRUMENTATION_STATUS_CODE: -[34]' qa-artifacts/ci/instrumentation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-platform-test-results
+          path: qa-artifacts/ci/**
+          retention-days: 14

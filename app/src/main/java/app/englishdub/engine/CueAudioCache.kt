@@ -17,7 +17,34 @@ class CueAudioCache(
     private val compressed: Boolean = false,
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
 ) {
-    init { directory.mkdirs() }
+    private data class Entry(val audio: File, val marker: File, val bytes: Long)
+    // One owner processes preparation at a time. Reconcile disk once per cache instance,
+    // then update size and LRU incrementally instead of listing every file for every cue.
+    private val entries = LinkedHashMap<String, Entry>(16, 0.75f, true)
+    private var totalBytes = 0L
+    init {
+        directory.mkdirs()
+        directory.listFiles().orEmpty()
+            .filter { it.isFile && (it.name.endsWith(".pcm") || it.name.endsWith(".pcm.gz")) && !it.name.contains(".partial.") }
+            .sortedBy { it.lastModified() }
+            .forEach { record(it) }
+    }
+
+    private fun key(file: File) = file.name.removeSuffix(".pcm.gz").removeSuffix(".pcm")
+
+    private fun record(audio: File) {
+        val marker = File(directory, "${key(audio)}.complete")
+        val entry = Entry(audio, marker, audio.length() + marker.length())
+        entries.put(audio.name, entry)?.let { totalBytes -= it.bytes }
+        totalBytes += entry.bytes
+    }
+
+    private fun touch(audio: File, marker: File) {
+        record(audio)
+        val now = System.currentTimeMillis()
+        audio.setLastModified(now)
+        marker.setLastModified(now)
+    }
 
     suspend fun get(
         text: String,
@@ -48,8 +75,8 @@ class CueAudioCache(
                 } finally { wav.delete(); partial.delete() }
             }
             require(pcm.length() > 0) { "The offline voice generated no audio." }
-            touch(key, pcm, marker)
-            evictIfNeeded(protectedPaths + pcm.path)
+            touch(pcm, marker)
+            evictIfNeeded(protectedPaths, pcm.path)
             return SpeechAsset(pcm, pcm.length() * 1000 / (AudioTools.RATE * 2))
         }
 
@@ -79,8 +106,8 @@ class CueAudioCache(
                 rawLength
             } finally { wav.delete(); pcm.delete(); partialGz.delete() }
         }
-        touch(key, gz, marker)
-        evictIfNeeded(protectedPaths + gz.path)
+        touch(gz, marker)
+        evictIfNeeded(protectedPaths, gz.path)
         return SpeechAsset(gz, pcmBytes * 1000 / (AudioTools.RATE * 2))
     }
 
@@ -93,46 +120,24 @@ class CueAudioCache(
         return if (pcmBytes > 0 && pcmBytes % 2 == 0L && gz.length() == gzBytes) pcmBytes else null
     }
 
-    fun evictIfNeeded(protectedPaths: Set<String> = emptySet()) {
-        val protectedNames = protectedPaths.flatMap { path ->
-            val f = File(path)
-            val base = f.name.removeSuffix(".pcm.gz").removeSuffix(".pcm")
-            listOf(f.name, "$base.complete", "$base.pcm", "$base.pcm.gz")
-        }.toSet()
-        val files = directory.listFiles()?.filter {
-            it.isFile && (it.name.endsWith(".pcm") || it.name.endsWith(".pcm.gz"))
-        }.orEmpty()
-        var totalBytes = directory.listFiles()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+    fun evictIfNeeded(protectedPaths: Set<String> = emptySet(), currentPath: String? = null) {
         if (totalBytes <= maxBytes) return
-        val candidates = files.filter { it.name !in protectedNames && it.path !in protectedPaths }
-            .sortedWith(compareBy({ accessOrder(it.name.removeSuffix(".pcm.gz").removeSuffix(".pcm")) }, { it.lastModified() }))
-        for (file in candidates) {
-            if (totalBytes <= maxBytes) break
-            val base = file.name.removeSuffix(".pcm.gz").removeSuffix(".pcm")
-            val marker = File(directory, "$base.complete")
-            val freed = file.length() + (if (marker.exists()) marker.length() else 0L)
-            if (file.delete()) {
-                marker.delete()
-                removeAccess(base)
-                totalBytes -= freed
+        val protectedKeys = protectedPaths.map { key(File(it)) }.toHashSet()
+        currentPath?.let { protectedKeys += key(File(it)) }
+        val iterator = entries.entries.iterator()
+        while (totalBytes > maxBytes && iterator.hasNext()) {
+            val entry = iterator.next().value
+            if (key(entry.audio) in protectedKeys) continue
+            if (!entry.audio.exists() || entry.audio.delete()) {
+                entry.marker.delete()
+                totalBytes -= entry.bytes
+                iterator.remove()
             }
         }
     }
 
     companion object {
         const val DEFAULT_MAX_BYTES = 256L * 1024 * 1024
-        private var sequence = 0L
-        private val accessLog = HashMap<String, Long>()
-
-        @Synchronized private fun touch(key: String, audio: File, marker: File) {
-            accessLog[key] = ++sequence
-            val now = System.currentTimeMillis()
-            audio.setLastModified(now)
-            marker.setLastModified(now)
-        }
-
-        @Synchronized private fun accessOrder(key: String): Long = accessLog[key] ?: 0L
-        @Synchronized private fun removeAccess(key: String) { accessLog.remove(key) }
 
         fun reusable(directory: File, voiceId: String, maxBytes: Long = DEFAULT_MAX_BYTES): CueAudioCache =
             CueAudioCache(directory, voiceId, compressed = true, maxBytes = maxBytes)

@@ -37,7 +37,7 @@ data class DeviceHardwareProfile(
     val recommendedSpeechCacheBytes: Long = HardwareProfile.recommendedSpeechCacheBytes(tier, freeStorageBytes),
     val recommendSpeechPack: Boolean = freeStorageBytes >= HardwareProfile.SPEECH_PACK_HEADROOM_BYTES,
     val recommendVadPack: Boolean = freeStorageBytes >= HardwareProfile.MIN_STORAGE_RESERVE_BYTES + ModelStore.VAD_SIZE,
-    val recommendVadEnabled: Boolean = true,
+    val recommendVadEnabled: Boolean = false,
 ) {
     val summaryLine: String
         get() = HardwareProfile.formatSummaryLine(availableCores, primaryAbi, totalRamBytes, hasHardwareAacEncoder)
@@ -85,9 +85,7 @@ object HardwareProfile {
                 isHardwareAccelerated = isHardwareCodec(info),
             )
         }
-        val primaryAbi = Build.SUPPORTED_ABIS?.firstOrNull().orEmpty().ifBlank { "arm64-v8a" }
-        val arm64 = isArm64Abi(primaryAbi)
-        hasFastAacSupport(descriptors, arm64) to hasHardwareVideoSupport(descriptors)
+        hasFastAacSupport(descriptors) to hasHardwareVideoSupport(descriptors)
     }
 
     fun isArm64Abi(abi: String): Boolean {
@@ -134,7 +132,7 @@ object HardwareProfile {
         val cores = availableCores.coerceAtLeast(1)
         val abi = formatAbiLabel(primaryAbi)
         val ram = formatRamLabel(totalRamBytes)
-        val aac = if (hasHardwareAacEncoder) "High-speed AAC" else "Standard AAC"
+        val aac = if (hasHardwareAacEncoder) "Hardware AAC available" else "Standard AAC"
         return "Detected: ${cores}-core $abi · $ram · $aac"
     }
 
@@ -158,7 +156,7 @@ object HardwareProfile {
         return when (tier) {
             HardwareTier.BUDGET -> 1
             HardwareTier.BALANCED -> 2
-            HardwareTier.HIGH_PERFORMANCE -> (cores / 2).coerceIn(2, 4)
+            HardwareTier.HIGH_PERFORMANCE -> 2.coerceAtMost(cores)
         }
     }
 
@@ -174,13 +172,11 @@ object HardwareProfile {
         }
     }
 
-    fun hasFastAacSupport(codecs: List<CodecDescriptor>, isArm64: Boolean = true): Boolean {
+    fun hasFastAacSupport(codecs: List<CodecDescriptor>): Boolean {
         val aacEncoders = codecs.filter { codec ->
             codec.isEncoder && codec.supportedTypes.any { it.equals("audio/mp4a-latm", ignoreCase = true) }
         }
-        if (aacEncoders.isEmpty()) return false
-        if (aacEncoders.any { it.isHardwareAccelerated }) return true
-        return isArm64 && hasHardwareVideoSupport(codecs)
+        return aacEncoders.any { it.isHardwareAccelerated }
     }
 
     fun hasHardwareVideoSupport(codecs: List<CodecDescriptor>): Boolean =
@@ -224,7 +220,7 @@ object HardwareProfile {
             recommendedSpeechCacheBytes = cacheBytes,
             recommendSpeechPack = recommendSpeech,
             recommendVadPack = recommendVad,
-            recommendVadEnabled = true,
+            recommendVadEnabled = false,
         )
     }
 
@@ -238,12 +234,11 @@ object HardwareProfile {
         val libraryNeedsSpeech = jobs.any { job ->
             job.mode == "speech" || (job.mode != "english_audio" && job.subtitleUri == null && job.subtitleTrackIndex < 0 && job.state == "missing_pack")
         }
-        val criticallyLowStorage = profile.freeStorageBytes < MIN_STORAGE_RESERVE_BYTES + ModelStore.VAD_SIZE
-        val wantSpeech = libraryNeedsSpeech || profile.recommendSpeechPack || criticallyLowStorage
-        val wantVad = profile.recommendVadPack || criticallyLowStorage || libraryNeedsSpeech
+        val wantSpeech = libraryNeedsSpeech || profile.recommendSpeechPack
+        // VAD is experimental: download it only through the explicit detector action.
 
         val downloadSpeech = !speechReady && wantSpeech
-        val downloadVad = !vadReady && wantVad
+        val downloadVad = false
 
         val neededTranslations = jobs
             .map { it.sourceLanguage }
@@ -354,13 +349,11 @@ object HardwareProfile {
     fun applyOptimalSettings(
         prefs: SharedPreferences,
         profile: DeviceHardwareProfile,
-        vadVerified: Boolean,
         selectedVoiceName: String? = null,
     ) {
         val editor = prefs.edit()
             .putInt("inferenceThreads", profile.recommendedThreads)
             .putLong("speechCacheMaxBytes", profile.recommendedSpeechCacheBytes)
-            .putBoolean("vad", profile.recommendVadEnabled && vadVerified)
             .putBoolean("autoSetupCompleted", true)
             .putString("autoSetupTier", profile.tier.name)
             .putString("autoSetupSummary", profile.summaryLine)
@@ -372,7 +365,7 @@ object HardwareProfile {
 
     fun resolveInferenceThreads(context: Context, prefs: SharedPreferences): Int {
         val saved = prefs.getInt("inferenceThreads", 0)
-        if (saved in 1..4) return saved
+        if (saved > 0) return saved.coerceIn(1, 2)
         return detect(context).recommendedThreads
     }
 

@@ -1,5 +1,7 @@
 # Validation — 0.3.0 experimental preview
 
+Current optimization changes (2026-11-09) pass 52 JVM tests, lint with zero errors / 67 warnings, debug/test packaging, and unsigned release packaging. No target was connected for this change, so the Android runtime results and APK hashes below describe the earlier build. See [optimization validation](docs/validation/OPTIMIZATION-2026-11-09.md). The 36-case evaluation is a synthetic text/pipeline regression, not measured language accuracy; see the corrected [evidence boundary](docs/evaluation/EVALUATION-SET-0.3.md#evidence-boundary).
+
 The 0.3.0 release delivers track inspection & source recommendations, 60-second scene previews, searchable dialogue review/editing with spoken-only pronunciation overrides and preserved song ranges, a persistent reorderable queue with charging-only policy and storage cleanup, SRT/M4A exports, Room 2→3 migration, reusable GZIP-compressed speech clips (`.pcm.gz`), and smart hardware auto-detection (`HardwareProfile`). It passes 50 JVM unit regressions and 16 Android instrumentation tests on the accelerated ARM64 Android 15 emulator. Language quality remains labeled **experimental** pending human bilingual review.
 
 | Check | Current result |
@@ -11,7 +13,7 @@ The 0.3.0 release delivers track inspection & source recommendations, 60-second 
 | Maximum sampled stable drift | 53 ms; limit remains 150 ms |
 | Preview packaging (`app-preview.apk`, versionCode 4) | ARM64, 20,314,534 bytes, SHA-256 `7d6860373565673e4e6ee2cac8adfa00352be5fd0c14255cd013070510e8b720` |
 | Unsigned release packaging (`app-release-unsigned.apk`, versionCode 4) | ARM64, 20,306,326 bytes, SHA-256 `fa18ecdcb61e61229780ff7197ca8df6a8012d509266dae40701e26a33d2f036` |
-| 36-clip Hindi/Urdu/Tamil evaluation set (`docs/evaluation/EVALUATION-SET-0.3.md`) | 36 redistributable clips (12 `hi`, 12 `ur`, 12 `ta` across 6 conditions) compared against 0.2.1; labeled experimental pending human bilingual review |
+| 36-clip Hindi/Urdu/Tamil evaluation set (`docs/evaluation/EVALUATION-SET-0.3.md`) | 36 text fixture scenarios (12 per language across 6 conditions); reference translations and synthetic audio, not a measured historical-build or language-quality comparison |
 | Physical-phone efficiency and synchronization | Unverified |
 | Hindi/Urdu/Tamil human bilingual sign-off | Pending (`bilingualReviewed: false` in `docs/evaluation/evaluation-manifest-0.3.json`) |
 

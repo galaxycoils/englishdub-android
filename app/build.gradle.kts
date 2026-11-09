@@ -12,8 +12,8 @@ android {
         applicationId = "app.englishdub"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += "en"
         ndk { abiFilters += providers.gradleProperty("dub.abi").getOrElse("arm64-v8a").split(',') }

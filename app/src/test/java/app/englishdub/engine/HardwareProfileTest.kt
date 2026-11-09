@@ -54,7 +54,7 @@ class HardwareProfileTest {
         assertEquals(HardwareTier.BALANCED, balanced.tier)
         assertEquals(2, balanced.recommendedThreads)
         assertEquals(256 * mib, balanced.recommendedSpeechCacheBytes)
-        assertEquals("Detected: 8-core ARM64 · 6 GB RAM · High-speed AAC", balanced.summaryLine)
+        assertEquals("Detected: 8-core ARM64 · 6 GB RAM · Hardware AAC available", balanced.summaryLine)
         assertEquals("Balanced / Standard · 2 recognition threads · 256 MB speech cache", balanced.tuningSummaryLine)
 
         val highPerf = HardwareProfile.evaluate(
@@ -65,9 +65,9 @@ class HardwareProfileTest {
             hasHardwareAacEncoder = true,
         )
         assertEquals(HardwareTier.HIGH_PERFORMANCE, highPerf.tier)
-        assertEquals(4, highPerf.recommendedThreads) // capped at 4 to prevent thermal throttling
+        assertEquals(2, highPerf.recommendedThreads) // matches the existing native limit
         assertEquals(384 * mib, highPerf.recommendedSpeechCacheBytes)
-        assertEquals("Detected: 12-core ARM64 · 12 GB RAM · High-speed AAC", highPerf.summaryLine)
+        assertEquals("Detected: 12-core ARM64 · 12 GB RAM · Hardware AAC available", highPerf.summaryLine)
 
         // Low storage (< 1 GiB free) shrinks speech cache cap to 64 MiB across all tiers
         val tightHighPerf = HardwareProfile.evaluate(
@@ -85,11 +85,10 @@ class HardwareProfileTest {
         val hwAvc = CodecDescriptor("c2.qti.avc.decoder", isEncoder = false, listOf("video/avc"), isHardwareAccelerated = true)
         val swAvc = CodecDescriptor("c2.android.avc.decoder", isEncoder = false, listOf("video/avc"), isHardwareAccelerated = false)
 
-        assertTrue(HardwareProfile.hasFastAacSupport(listOf(hwAac), isArm64 = false))
-        assertTrue(HardwareProfile.hasFastAacSupport(listOf(swAac, hwAvc), isArm64 = true))
-        assertFalse(HardwareProfile.hasFastAacSupport(listOf(swAac, hwAvc), isArm64 = false))
-        assertFalse(HardwareProfile.hasFastAacSupport(listOf(swAac, swAvc), isArm64 = true))
-        assertFalse(HardwareProfile.hasFastAacSupport(listOf(hwAvc), isArm64 = true))
+        assertTrue(HardwareProfile.hasFastAacSupport(listOf(hwAac)))
+        assertFalse("Hardware video decoding does not imply hardware AAC encoding", HardwareProfile.hasFastAacSupport(listOf(swAac, hwAvc)))
+        assertFalse(HardwareProfile.hasFastAacSupport(listOf(swAac, swAvc)))
+        assertFalse(HardwareProfile.hasFastAacSupport(listOf(hwAvc)))
         assertTrue(HardwareProfile.hasHardwareVideoSupport(listOf(hwAvc)))
         assertFalse(HardwareProfile.hasHardwareVideoSupport(listOf(swAvc)))
     }
@@ -112,11 +111,13 @@ class HardwareProfileTest {
             jobs = libraryJobs,
         )
         assertTrue(plan.downloadSpeechPack)
-        assertTrue(plan.downloadVadPack)
+        assertFalse("Experimental VAD requires its explicit download action", plan.downloadVadPack)
         assertEquals(listOf("hi"), plan.translationPacksToDownload)
         assertFalse(plan.allInstalled)
+        assertFalse(plan.enableVadAfterSetup)
+        assertFalse(normalProfile.recommendVadEnabled)
         assertEquals(
-            ModelStore.SIZE + ModelStore.VAD_SIZE + HardwareProfile.TRANSLATION_PACK_ESTIMATE_BYTES,
+            ModelStore.SIZE + HardwareProfile.TRANSLATION_PACK_ESTIMATE_BYTES,
             plan.requiredDownloadBytes,
         )
 
@@ -149,7 +150,7 @@ class HardwareProfileTest {
             jobs = emptyList(),
         )
         assertFalse("Optional 57 MB speech pack should be skipped when storage is tight", noSpeechPlan.downloadSpeechPack)
-        assertTrue("Lightweight 0.9 MB detector should still be installed", noSpeechPlan.downloadVadPack)
+        assertFalse("Experimental detector is opt-in", noSpeechPlan.downloadVadPack)
         assertTrue(HardwareProfile.checkAdmission(tightProfile.freeStorageBytes, noSpeechPlan.requiredDownloadBytes).allowed)
 
         // If a film in the library explicitly uses speech mode, speech pack is required
@@ -162,7 +163,7 @@ class HardwareProfileTest {
             jobs = listOf(speechJob),
         )
         assertTrue(speechRequiredPlan.downloadSpeechPack)
-        assertTrue(speechRequiredPlan.downloadVadPack)
+        assertFalse(speechRequiredPlan.downloadVadPack)
     }
 
     @Test fun `admission check enforces thermal battery and storage headroom rules`() {

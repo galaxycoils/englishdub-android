@@ -2,9 +2,9 @@
 
 A native Android player that prepares an English voice track on your phone, then reuses it while you watch. Designed for low resource use on budget and midrange phones.
 
-**Status: 0.3.0 experimental preview.** Hindi, Urdu, and Tamil are the initial translation paths. Language quality, battery use, and phone memory targets require device validation. This is an offline preparation app: speech recognition may take longer than the film on a slow phone.
+**Status: 0.3.1 experimental preview.** Hindi, Urdu, and Tamil are the initial translation paths. Language quality, battery use, and phone memory targets require device validation. This is an offline preparation app: speech recognition may take longer than the film on a slow phone.
 
-The strict 150 ms playback clock test, buffering/seek recovery tests, 0.3 scene preview and dialogue-edit rebuild regressions, Room 1→2→3 migrations, and the 36-clip evaluation suite pass on the accelerated ARM64 emulator. Physical-phone synchronization is still unverified; the older software x86 failure is retained in the evidence. See [validation](VALIDATION.md) and the [36-clip evaluation set](docs/evaluation/EVALUATION-SET-0.3.md) before treating this preview as ready for regular viewing.
+The strict 150 ms playback clock test, buffering/seek recovery tests, 0.3 scene preview and dialogue-edit rebuild regressions, Room 1→2→3 migrations, and the 36-case text-fixture regression suite pass on the accelerated ARM64 emulator. Physical-phone synchronization is still unverified; the older software x86 failure is retained in the evidence. See [validation](VALIDATION.md) and the [evaluation fixtures and their limits](docs/evaluation/EVALUATION-SET-0.3.md) before treating this preview as ready for regular viewing.
 
 ## Choose the lightest path
 
@@ -43,6 +43,13 @@ The 0.9 MB Silero speech detector can help skip non-dialogue sections. It is **e
 - Hardware-supported codecs are preferred. Actual supported video and audio formats depend on the device.
 - Long translated lines are sped up by at most 1.25×, then queued without overlapping or cutting words. Timing warnings appear in Dialogue Review and before playback. Final speech can finish over the last video frame.
 - A document provider that cannot supply a reliable seekable source identity forces preparation-cache invalidation. Ordinary local files are the most reliable input.
+
+## What's new in 0.3.1
+
+- Incremental speech-cache accounting removes directory scans on each cue; recognition appends checkpoints without copying the entire cue list.
+- Full-film dub replacements use separate output versions and commit the matching cue metadata and file reference together, preserving the previous audio on failure.
+- Auto-setup preserves explicit speech-detector preferences, propagates missing-pack failures, and reports the native one/two-thread limit accurately.
+- Hardware AAC availability is reported independently of video decoding support. The evaluation documentation distinguishes synthetic pipeline fixtures from measured language quality.
 
 ## What's new in 0.3
 
@@ -88,7 +95,7 @@ Requirements: JDK 17, SDK platform 36, Build Tools 35, NDK `27.2.12479018`, and 
 ./gradlew :app:assemblePreview
 ```
 
-Output: `app/build/outputs/apk/preview/app-preview.apk`. The preview ID is `app.englishdub.preview`; its version code is 4 (`0.3.0-preview`). The Mac preview is signed with this Mac’s local debug key. The original cloud preview key was not transferred, so this APK cannot update the old cloud-signed 0.2.0 preview in place. It can update 0.2.1+ previews signed on this Mac. Keep existing app data until you have exported anything you need; do not uninstall merely to resolve a signer mismatch. Never use this key for production publication.
+Output: `app/build/outputs/apk/preview/app-preview.apk`. The preview ID is `app.englishdub.preview`; its version code is 5 (`0.3.1-preview`). The Mac preview is signed with this Mac’s local debug key. The original cloud preview key was not transferred, so this APK cannot update the old cloud-signed 0.2.0 preview in place. It can update 0.2.1+ previews signed on this Mac. Keep existing app data until you have exported anything you need; do not uninstall merely to resolve a signer mismatch. Never use this key for production publication.
 
 ```sh
 ./gradlew :app:assembleRelease

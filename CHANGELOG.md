@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 experimental preview
+
+- Index speech-cache sizes and LRU order once per stage; trim after active work ends and avoid repeated protected-set and checkpoint-list copies.
+- Publish new full-film audio versions with matching Room metadata, preserving the previous output until publication succeeds and cleaning orphaned versions during recovery.
+- Preserve explicit VAD opt-in, keep detector downloads explicit, and propagate translation-pack failures before marking setup complete.
+- Match displayed and saved recognition-thread settings to the native one/two-thread limit; report AAC hardware support independently of video acceleration.
+- Add platform regression execution in GitHub Actions and correct the synthetic language-evaluation evidence boundary.
+- Version code 5; uses the same local Mac preview signer. Physical-phone efficiency, synchronization, and bilingual review remain pending.
+
 ## 0.3.0 experimental preview
 
 - Add audio and text-subtitle track inspection with language normalization, track labels, "Unknown language" fallback, priority recommendations (English audio → English subtitles → translated subtitles → speech recognition), explicit overrides, and millisecond subtitle timing offsets.

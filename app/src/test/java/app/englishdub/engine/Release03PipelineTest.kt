@@ -325,6 +325,43 @@ class Release03PipelineTest {
         } finally { dir.deleteRecursively() }
     }
 
+    @Test fun `timeline publication failure retains previous audio and recovery removes only orphan versions`() = runBlocking {
+        val files = Files.createTempDirectory("dub-publish").toFile()
+        val dir = File(files, "jobs/j1").apply { mkdirs() }
+        try {
+            val old = File(dir, "english.m4a").apply { writeText("old audio") }
+            val original = File(dir, "video").apply { writeText("user movie") }
+            try {
+                DialoguePipeline.publishTimeline(emptyList(), 5000L, dir,
+                    encode = { _, _, out -> out.writeText("new audio") },
+                    publish = { out ->
+                        assertTrue(out.exists())
+                        assertEquals("old audio", old.readText())
+                        error("Database transaction failed")
+                    })
+                fail("Publication failure must propagate")
+            } catch (e: IllegalStateException) { assertEquals("Database transaction failed", e.message) }
+            assertEquals(setOf("english.m4a", "video"), dir.listFiles()!!.map { it.name }.toSet())
+            var publishedPath: String? = null
+            val completed = DialoguePipeline.publishTimeline(emptyList(), 5000L, dir,
+                encode = { _, _, out -> out.writeText("complete new audio") },
+                publish = { out -> publishedPath = out.path; assertTrue(old.exists()) })
+            assertEquals(completed.path, publishedPath)
+            // Simulate process death after file completion but before database publication.
+            val orphan = File(dir, "english-${java.util.UUID.randomUUID()}.m4a").apply { writeText("orphan") }
+            assertEquals(old.length() + completed.length() + orphan.length(), ResourcePolicy.computeStorage(files).completedDubsBytes)
+            ResourcePolicy.removeUnusedDubs(dir, publishedPath)
+            assertFalse(orphan.exists())
+            assertFalse(old.exists())
+            assertEquals("complete new audio", completed.readText())
+            assertEquals("user movie", original.readText())
+            assertEquals(completed.length(), ResourcePolicy.computeStorage(files).completedDubsBytes)
+            ResourcePolicy.clearCompletedDubs(files)
+            assertFalse(completed.exists())
+            assertTrue(original.exists())
+        } finally { files.deleteRecursively() }
+    }
+
     @Test fun `split stage signatures do not invalidate inference when captions or playback prefs change`() {
         val rec1 = PreparationIdentity.recognition("src1", 0, "hi", "model1", "no-vad")
         val trans1 = PreparationIdentity.translation(rec1, -1, "hi", "speech", "model1")

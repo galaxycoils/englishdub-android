@@ -94,5 +94,32 @@ class CueAudioCacheTest {
             assertFalse("Unprotected clip A must be evicted to stay within cap", a.file.exists())
         } finally { directory.deleteRecursively() }
     }
+    @Test fun `long cue passes scan the cache once and trim after active protection ends`() = runBlocking {
+        val directory = Files.createTempDirectory("dub-cache-scan").toFile()
+        var scans = 0
+        val counted = object : File(directory.path) {
+            override fun listFiles(): Array<File>? { scans++; return super.listFiles() }
+        }
+        try {
+            val cache = CueAudioCache(counted, "voice", maxBytes = 7000L)
+            val protected = mutableSetOf<String>()
+            var generated = 0
+            repeat(100) { index ->
+                val asset = cache.get("Line $index", 1f, protected) { file, _ -> generated++; wave(file) }
+                protected += asset.file.path
+            }
+            assertEquals(1, scans)
+            assertTrue(protected.all { File(it).exists() })
+            repeat(100) { index ->
+                cache.get("Line $index", 1f, protected) { _, _ -> fail("Warm cache must not synthesize") }
+            }
+            assertEquals(100, generated)
+            assertEquals(1, scans)
+            cache.evictIfNeeded()
+            assertTrue(directory.listFiles()!!.sumOf { it.length() } <= 7000L)
+            assertTrue(File(protected.last()).exists())
+        } finally { directory.deleteRecursively() }
+    }
+
 }
 

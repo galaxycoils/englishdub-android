@@ -16,7 +16,7 @@ URL. It does not create a differently named repository or force-push history.
 
 ## Preview release
 
-The 0.3.0 experimental preview has version code 4 (succeeding 0.2.1 preview version code 3). Release assets include the complete signed ARM64 preview APK (`EnglishDub-0.3.0-preview-arm64.apk`), the unsigned ARM64 release APK (`EnglishDub-0.3.0-release-unsigned-arm64.apk`), checksums, source archive, and the validation evidence ZIP. The release notes identify the exact source commit, signer, tested target, pass/skip/failure results and known limitations. Physical-phone efficiency and Hindi/Urdu/Tamil human bilingual sign-off remain unverified. This is an experimental prerelease, not production acceptance.
+The 0.3.1 experimental preview has version code 5 (succeeding 0.3.0 preview version code 4). Release assets include the complete signed ARM64 preview APK (`EnglishDub-0.3.1-preview-arm64.apk`), the unsigned ARM64 release APK (`EnglishDub-0.3.1-release-unsigned-arm64.apk`), checksums, source archive, and the validation evidence ZIP. The release notes identify the exact source commit, signer, tested target, pass/skip/failure results and known limitations. Physical-phone efficiency and Hindi/Urdu/Tamil human bilingual sign-off remain unverified. This is an experimental prerelease, not production acceptance.
 
 The Mac uses a **new local debug signer**. The original cloud preview private key
 was not transferred, so Mac-built previews cannot update old cloud-signed
@@ -27,5 +27,5 @@ separately managed release key.
 
 GitHub Actions builds the unsigned production APK and a matched pair of
 Mac-independent debug application/instrumentation APKs, then runs JVM checks and
-lint. CI does not provision a device or establish Android runtime acceptance.
+lint. A separate CI job provisions an Android 15 x86_64 emulator for seven platform regressions. It does not establish physical-phone performance or full offline voice/model/player acceptance.
 Each CI runner's debug signer is independent of this Mac and the cloud preview.

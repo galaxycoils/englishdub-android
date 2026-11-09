@@ -79,7 +79,7 @@ object ResourcePolicy {
                 jobDir.walkTopDown().filter { it.isFile }.forEach { f ->
                     when {
                         f.name.startsWith("preview.") -> previews += f.length()
-                        f.name == "english.m4a" || f.name == "english.partial.m4a" -> completedDubs += f.length()
+                        isDubOutput(f) -> completedDubs += f.length()
                         f.name.startsWith("video") -> downloads += f.length()
                         f.parentFile?.name == "cue-audio" || f.extension in setOf("pcm", "wav", "gz", "complete", "cache") -> speechCache += f.length()
                     }
@@ -119,12 +119,20 @@ object ResourcePolicy {
         }
     }
 
+    private val versionedDub = Regex("english-[0-9a-fA-F-]{36}\\.m4a(?:\\.partial)?")
+    private fun isDubOutput(file: File): Boolean = file.name == "english.m4a" ||
+        file.name == "english.partial.m4a" || versionedDub.matches(file.name)
+
+    fun removeUnusedDubs(directory: File, retainedPath: String?) {
+        directory.listFiles()?.filter { it.isFile && isDubOutput(it) && it.path != retainedPath }
+            ?.forEach { it.delete() }
+    }
+
     fun clearCompletedDubs(filesDir: File, activeJobId: String? = null) {
         val jobsRoot = File(filesDir, "jobs")
         if (!jobsRoot.exists()) return
         jobsRoot.listFiles()?.filter { it.isDirectory && it.name != activeJobId }?.forEach { jobDir ->
-            File(jobDir, "english.m4a").delete()
-            File(jobDir, "english.partial.m4a").delete()
+            removeUnusedDubs(jobDir, null)
         }
     }
 
